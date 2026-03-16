@@ -40,9 +40,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/Piscescup/linq-in-java/</connection>
-        <developerConnection>scm:git:ssh://github.com/Piscescup/linq-in-java/</developerConnection>
-        <url>https://github.com/Piscescup/linq-in-java/tree/master</url>
+        <connection>scm:git:git://github.com/Piscescup/linq-in-java2/</connection>
+        <developerConnection>scm:git:ssh://github.com/Piscescup/linq-in-java2/</developerConnection>
+        <url>https://github.com/Piscescup/linq-in-java2/tree/main</url>
     </scm>
 
 
