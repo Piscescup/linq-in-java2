@@ -17,7 +17,7 @@ package io.github.piscescup;
  *                 fluent method chaining
  *
  * @author REN YuanTong
- * @since 1.1.0
+ * @since 1.0.0
  */
 public interface BaseEnumerable<T, SUB_BE extends BaseEnumerable<T, SUB_BE>>
     extends InternalEnumerable<T>, AutoCloseable {
