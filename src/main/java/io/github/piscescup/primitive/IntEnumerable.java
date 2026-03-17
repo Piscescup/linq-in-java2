@@ -2,7 +2,17 @@ package io.github.piscescup.primitive;
 
 import io.github.piscescup.Enumerable;
 import io.github.piscescup.BaseEnumerable;
+import io.github.piscescup.Enumerator;
+import io.github.piscescup.Groupable;
+import io.github.piscescup.entries.BinEntry;
+import io.github.piscescup.entries.TriEntry;
+import io.github.piscescup.interfaces.Equalator;
+import io.github.piscescup.interfaces.exfunction.BinFunction;
+import io.github.piscescup.interfaces.exfunction.primitive.IntBinFunction;
+import io.github.piscescup.util.validation.NullCheck;
 
+import java.util.Comparator;
+import java.util.NoSuchElementException;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.BiFunction;
@@ -49,6 +59,140 @@ public interface IntEnumerable
     <R> Enumerable<R> selectToObj(IntFunction<? extends R> selector);
 
     /**
+     * Groups values according to a specified key selector function.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param <K> the key type
+     * @return an {@link Enumerable} containing grouped values keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    <K> Enumerable<Groupable<K, Integer>> groupBy(IntFunction<? extends K> keySelector);
+
+    /**
+     * Groups values according to a specified key selector function and compares keys by using
+     * the supplied equalator.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param equalator the equality comparer used to compare grouping keys
+     * @param <K> the key type
+     * @return an {@link Enumerable} containing grouped values keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector} or {@code equalator} is {@code null}
+     */
+    <K> Enumerable<Groupable<K, Integer>> groupBy(
+        IntFunction<? extends K> keySelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Groups values according to a specified key selector function and projects the elements for
+     * each group.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param elementSelector the function used to project grouped values
+     * @param <K> the key type
+     * @param <E> the projected element type
+     * @return an {@link Enumerable} containing grouped projected elements keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector} or {@code elementSelector} is {@code null}
+     */
+    <K, E> Enumerable<Groupable<K, E>> groupBy(
+        IntFunction<? extends K> keySelector,
+        IntFunction<? extends E> elementSelector
+    );
+
+    /**
+     * Groups values according to a specified key selector function, projects the elements for each
+     * group, and compares keys by using the supplied equalator.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param elementSelector the function used to project grouped values
+     * @param equalator the equality comparer used to compare grouping keys
+     * @param <K> the key type
+     * @param <E> the projected element type
+     * @return an {@link Enumerable} containing grouped projected elements keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector}, {@code elementSelector}, or {@code equalator} is {@code null}
+     */
+    <K, E> Enumerable<Groupable<K, E>> groupBy(
+        IntFunction<? extends K> keySelector,
+        IntFunction<? extends E> elementSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Groups values according to a specified key selector function and creates a result value from
+     * each group and its key.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param resultSelector the function used to create a result value from each group and its key
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing projected group results
+     * @throws NullPointerException if {@code keySelector} or {@code resultSelector} is {@code null}
+     */
+    <K, R> Enumerable<R> groupResultBy(
+        IntFunction<? extends K> keySelector,
+        BiFunction<? super K, ? super IntEnumerable, ? extends R> resultSelector
+    );
+
+    /**
+     * Groups values according to a specified key selector function, creates a result value from
+     * each group and its key, and compares keys by using the supplied equalator.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param resultSelector the function used to create a result value from each group and its key
+     * @param equalator the equality comparer used to compare grouping keys
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing projected group results
+     * @throws NullPointerException if {@code keySelector}, {@code resultSelector}, or {@code equalator} is {@code null}
+     */
+    <K, R> Enumerable<R> groupResultBy(
+        IntFunction<? extends K> keySelector,
+        BiFunction<? super K, ? super IntEnumerable, ? extends R> resultSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Groups values according to a specified key selector function, projects the elements of each
+     * group, and creates a result value from each group and its key.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param elementSelector the function used to project grouped values
+     * @param resultSelector the function used to create a result value from each group and its key
+     * @param <K> the key type
+     * @param <E> the projected element type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing projected group results
+     * @throws NullPointerException if {@code keySelector}, {@code elementSelector}, or {@code resultSelector} is {@code null}
+     */
+    <K, E, R> Enumerable<R> groupResultBy(
+        IntFunction<? extends K> keySelector,
+        IntFunction<? extends E> elementSelector,
+        BiFunction<? super K, ? super Enumerable<E>, ? extends R> resultSelector
+    );
+
+    /**
+     * Groups values according to a specified key selector function, projects the elements of each
+     * group, creates a result value from each group and its key, and compares keys by using the
+     * supplied equalator.
+     *
+     * @param keySelector the function used to extract the grouping key from each value
+     * @param elementSelector the function used to project grouped values
+     * @param resultSelector the function used to create a result value from each group and its key
+     * @param equalator the equality comparer used to compare grouping keys
+     * @param <K> the key type
+     * @param <E> the projected element type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing projected group results
+     * @throws NullPointerException if {@code keySelector}, {@code elementSelector}, {@code resultSelector}, or {@code equalator} is {@code null}
+     */
+    <K, E, R> Enumerable<R> groupResultBy(
+        IntFunction<? extends K> keySelector,
+        IntFunction<? extends E> elementSelector,
+        BiFunction<? super K, ? super Enumerable<E>, ? extends R> resultSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
      * Maps each value to a {@code long}.
      *
      * @param selector the mapping function applied to each value
@@ -81,6 +225,52 @@ public interface IntEnumerable
      * @return an {@code IntEnumerable} containing the kept values
      */
     IntEnumerable take(long count);
+
+    /**
+     * Splits the sequence into consecutive chunks of the specified size.
+     *
+     * @param size the number of values in each chunk
+     * @return an {@link Enumerable} whose elements are chunked {@link IntEnumerable} subsequences
+     * @throws IllegalArgumentException if {@code size} is less than or equal to zero
+     */
+    Enumerable<IntEnumerable> chunk(int size);
+
+    /**
+     * Splits the sequence into consecutive chunks materialized as lists.
+     *
+     * @param size the number of values in each chunk
+     * @return an {@link Enumerable} whose elements are chunked {@link java.util.List} instances
+     * @throws IllegalArgumentException if {@code size} is less than or equal to zero
+     */
+    Enumerable<java.util.List<Integer>> chunkAsList(int size);
+
+    /**
+     * Extracts the sequence into an instance of the specified target type.
+     *
+     * @param clazz the target type token
+     * @param <R> the target type
+     * @return an instance of {@code R} containing data extracted from this sequence
+     * @throws NullPointerException if {@code clazz} is {@code null}
+     */
+    <R> R extractTo(Class<R> clazz);
+
+    /**
+     * Takes values from the start of the sequence while the predicate remains {@code true}.
+     *
+     * @param predicate the condition used to decide whether iteration should continue
+     * @return an {@code IntEnumerable} containing the longest matching prefix
+     * @throws NullPointerException if {@code predicate} is {@code null}
+     */
+    IntEnumerable takeWhileByInt(IntPredicate predicate);
+
+    /**
+     * Skips values from the start of the sequence while the predicate remains {@code true}.
+     *
+     * @param predicate the condition used to decide whether values should be skipped
+     * @return an {@code IntEnumerable} containing the remaining suffix after skipping the matching prefix
+     * @throws NullPointerException if {@code predicate} is {@code null}
+     */
+    IntEnumerable skipWhileByInt(IntPredicate predicate);
 
     /**
      * Returns the first value in the sequence.
@@ -122,6 +312,272 @@ public interface IntEnumerable
      * @throws NullPointerException if {@code other} is {@code null}
      */
     IntEnumerable concat(IntEnumerable other);
+
+    /**
+     * Produces the set intersection of this sequence and another sequence by using the default
+     * equality comparer to compare values.
+     *
+     * @param other the sequence whose distinct elements are used to intersect with this sequence
+     * @return an {@code IntEnumerable} containing the set intersection of the two sequences
+     * @throws NullPointerException if {@code other} is {@code null}
+     */
+    IntEnumerable intersect(IntEnumerable other);
+
+    /**
+     * Produces the set intersection of this sequence and another sequence by using the supplied
+     * equalator to compare values.
+     *
+     * @param other the sequence whose distinct elements are used to intersect with this sequence
+     * @param equalator the equality comparer used to compare values
+     * @return an {@code IntEnumerable} containing the set intersection of the two sequences
+     * @throws NullPointerException if {@code other} or {@code equalator} is {@code null}
+     */
+    IntEnumerable intersect(IntEnumerable other, Equalator<? super Integer> equalator);
+
+    /**
+     * Produces the set intersection of this sequence and a sequence of keys according to a
+     * specified key selector function.
+     *
+     * @param other the sequence of keys used to intersect with this sequence
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return an {@code IntEnumerable} containing values whose selected keys exist in {@code other}
+     * @throws NullPointerException if {@code other} or {@code keySelector} is {@code null}
+     */
+    <K> IntEnumerable intersectBy(Enumerable<? extends K> other, IntFunction<? extends K> keySelector);
+
+    /**
+     * Produces the set intersection of this sequence and a sequence of keys according to a
+     * specified key selector function and equalator.
+     *
+     * @param other the sequence of keys used to intersect with this sequence
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @return an {@code IntEnumerable} containing values whose selected keys exist in {@code other}
+     * @throws NullPointerException if {@code other}, {@code keySelector}, or {@code equalator} is {@code null}
+     */
+    <K> IntEnumerable intersectBy(
+        Enumerable<? extends K> other,
+        IntFunction<? extends K> keySelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Produces the set union of this sequence and another sequence by using the default equality
+     * comparer.
+     *
+     * @param other the sequence whose elements are united with this sequence
+     * @return an {@code IntEnumerable} containing the set union of the two sequences
+     * @throws NullPointerException if {@code other} is {@code null}
+     */
+    IntEnumerable union(IntEnumerable other);
+
+    /**
+     * Produces the set union of this sequence and another sequence by using the supplied equalator.
+     *
+     * @param other the sequence whose elements are united with this sequence
+     * @param equalator the equality comparer used to compare values
+     * @return an {@code IntEnumerable} containing the set union of the two sequences
+     * @throws NullPointerException if {@code other} or {@code equalator} is {@code null}
+     */
+    IntEnumerable union(IntEnumerable other, Equalator<? super Integer> equalator);
+
+    /**
+     * Produces the set union of this sequence and another sequence according to a specified key
+     * selector function.
+     *
+     * @param other the sequence whose elements are united with this sequence
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return an {@code IntEnumerable} containing the set union of the two sequences
+     * @throws NullPointerException if {@code other} or {@code keySelector} is {@code null}
+     */
+    <K> IntEnumerable unionBy(IntEnumerable other, IntFunction<? extends K> keySelector);
+
+    /**
+     * Produces the set union of this sequence and another sequence according to a specified key
+     * selector function and equalator.
+     *
+     * @param other the sequence whose elements are united with this sequence
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @return an {@code IntEnumerable} containing the set union of the two sequences
+     * @throws NullPointerException if {@code other}, {@code keySelector}, or {@code equalator} is {@code null}
+     */
+    <K> IntEnumerable unionBy(
+        IntEnumerable other,
+        IntFunction<? extends K> keySelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Correlates the elements of this sequence with another sequence based on matching keys.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from matching values
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from matching pairs
+     */
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from matching values
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from matching pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, or {@code resultSelector} is {@code null}
+     */
+    <K, R> Enumerable<R> join(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction< ? extends R> resultSelector
+    );
+
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys by using
+     * the supplied equalator to compare keys.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from matching values
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from matching pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, {@code resultSelector}, or {@code equalator} is {@code null}
+     */
+    <K, R> Enumerable<R> join(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction< ? extends R> resultSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys and
+     * includes all outer values.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from outer values and matching inner values
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from left join pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, or {@code resultSelector} is {@code null}
+     */
+    <K, R> Enumerable<R> leftJoin(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction< ? extends R> resultSelector
+    );
+
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys and
+     * includes all outer values by using the supplied equalator to compare keys.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from outer values and matching inner values
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from left join pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, {@code resultSelector}, or {@code equalator} is {@code null}
+     */
+    <K, R> Enumerable<R> leftJoin(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction< ? extends R> resultSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys and
+     * includes all inner values.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from outer values and matching inner values
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from right join pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, or {@code resultSelector} is {@code null}
+     */
+    <K, R> Enumerable<R> rightJoin(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction<? extends R> resultSelector
+    );
+
+    /**
+     * Correlates the values of this sequence with another sequence based on matching keys and
+     * includes all inner values by using the supplied equalator to compare keys.
+     *
+     * @param inner the sequence to join to this sequence
+     * @param outerKeySelector the function used to extract the join key from outer values
+     * @param innerKeySelector the function used to extract the join key from inner values
+     * @param resultSelector the function used to create a result element from outer values and matching inner values
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing result elements created from right join pairs
+     * @throws NullPointerException if {@code inner}, {@code outerKeySelector}, {@code innerKeySelector}, {@code resultSelector}, or {@code equalator} is {@code null}
+     */
+    <K, R> Enumerable<R> rightJoin(
+        IntEnumerable inner,
+        IntFunction<? extends K> outerKeySelector,
+        IntFunction<? extends K> innerKeySelector,
+        IntBinFunction<? extends R> resultSelector,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Applies a specified function to the corresponding values of this sequence and another
+     * sequence, producing a sequence of results.
+     *
+     * @param second the second sequence
+     * @param resultSelector the function used to project each pair of corresponding values
+     * @param <R> the result type
+     * @return an {@link Enumerable} containing projected zip results
+     * @throws NullPointerException if {@code second} or {@code resultSelector} is {@code null}
+     */
+    <R> Enumerable<R> zip(IntEnumerable second, IntBinFunction< ? extends R> resultSelector);
+
+    /**
+     * Produces a sequence of entries with values from this sequence and another sequence.
+     *
+     * @param second the second sequence
+     * @return an {@link Enumerable} of {@link BinEntry} values containing corresponding values
+     * @throws NullPointerException if {@code second} is {@code null}
+     */
+    Enumerable<BinEntry<Integer, Integer>> zip(IntEnumerable second);
+
+    /**
+     * Produces a sequence of entries with values from this sequence and two additional sequences.
+     *
+     * @param second the second sequence
+     * @param third the third sequence
+     * @return an {@link Enumerable} of {@link TriEntry} values containing corresponding values
+     * @throws NullPointerException if {@code second} or {@code third} is {@code null}
+     */
+    Enumerable<TriEntry<Integer, Integer, Integer>> zip(IntEnumerable second, IntEnumerable third);
 
     /**
      * Appends a single value to the end of the sequence.
@@ -231,6 +687,408 @@ public interface IntEnumerable
      * @throws IllegalStateException if more than one matching value exists
      */
     OptionalInt singleOptionalByInt(IntPredicate predicate);
+
+    /**
+     * Returns the value whose selected comparable key is minimal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return {@code int}, the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     * @throws ClassCastException if the selected keys are not mutually comparable
+     */
+    default <K extends Comparable<? super K>> int minBy(IntFunction<? extends K> keySelector) {
+        return minBy(keySelector, Comparator.naturalOrder());
+    }
+
+    /**
+     * Returns the value whose selected key is minimal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return {@code int}, the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default <K> int minBy(IntFunction<? extends K> keySelector, Comparator<? super K> comparator) {
+        return minOptionalBy(keySelector, comparator).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code int} key is minimal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int minByInt(IntUnaryOperator keySelector) {
+        return minOptionalByInt(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code long} key is minimal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int minByLong(IntToLongFunction keySelector) {
+        return minOptionalByLong(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code double} key is minimal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int minByDouble(IntToDoubleFunction keySelector) {
+        return minOptionalByDouble(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected comparable key is minimal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return an {@link OptionalInt} describing the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws ClassCastException if the selected keys are not mutually comparable
+     */
+    default <K extends Comparable<? super K>> OptionalInt minOptionalBy(
+        IntFunction<? extends K> keySelector
+    ) {
+        return minOptionalBy(keySelector, Comparator.naturalOrder());
+    }
+
+    /**
+     * Returns the value whose selected key is minimal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return an {@link OptionalInt} describing the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     */
+    default <K> OptionalInt minOptionalBy(
+        IntFunction<? extends K> keySelector,
+        Comparator<? super K> comparator
+    ) {
+        NullCheck.requireNonNull(keySelector);
+        NullCheck.requireNonNull(comparator);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int minValue = enumerator.current();
+            K minKey = keySelector.apply(minValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                K currentKey = keySelector.apply(current);
+                if (comparator.compare(currentKey, minKey) < 0) {
+                    minValue = current;
+                    minKey = currentKey;
+                }
+            }
+            return OptionalInt.of(minValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code int} key is minimal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt minOptionalByInt(IntUnaryOperator keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int minValue = enumerator.current();
+            int minKey = keySelector.applyAsInt(minValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                int currentKey = keySelector.applyAsInt(current);
+                if (currentKey < minKey) {
+                    minValue = current;
+                    minKey = currentKey;
+                }
+            }
+            return OptionalInt.of(minValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code long} key is minimal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt minOptionalByLong(IntToLongFunction keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int minValue = enumerator.current();
+            long minKey = keySelector.applyAsLong(minValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                long currentKey = keySelector.applyAsLong(current);
+                if (currentKey < minKey) {
+                    minValue = current;
+                    minKey = currentKey;
+                }
+            }
+            return OptionalInt.of(minValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code double} key is minimal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is minimal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt minOptionalByDouble(IntToDoubleFunction keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int minValue = enumerator.current();
+            double minKey = keySelector.applyAsDouble(minValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                double currentKey = keySelector.applyAsDouble(current);
+                if (Double.compare(currentKey, minKey) < 0) {
+                    minValue = current;
+                    minKey = currentKey;
+                }
+            }
+            return OptionalInt.of(minValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected comparable key is maximal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return {@code int}, the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     * @throws ClassCastException if the selected keys are not mutually comparable
+     */
+    default <K extends Comparable<? super K>> int maxBy(IntFunction<? extends K> keySelector) {
+        return maxBy(keySelector, Comparator.naturalOrder());
+    }
+
+    /**
+     * Returns the value whose selected key is maximal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return {@code int}, the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default <K> int maxBy(IntFunction<? extends K> keySelector, Comparator<? super K> comparator) {
+        return maxOptionalBy(keySelector, comparator).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code int} key is maximal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int maxByInt(IntUnaryOperator keySelector) {
+        return maxOptionalByInt(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code long} key is maximal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int maxByLong(IntToLongFunction keySelector) {
+        return maxOptionalByLong(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected {@code double} key is maximal.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return {@code int}, the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    default int maxByDouble(IntToDoubleFunction keySelector) {
+        return maxOptionalByDouble(keySelector).orElseThrow(NoSuchElementException::new);
+    }
+
+    /**
+     * Returns the value whose selected comparable key is maximal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param <K> the key type
+     * @return an {@link OptionalInt} describing the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     * @throws ClassCastException if the selected keys are not mutually comparable
+     */
+    default <K extends Comparable<? super K>> OptionalInt maxOptionalBy(
+        IntFunction<? extends K> keySelector
+    ) {
+        return maxOptionalBy(keySelector, Comparator.naturalOrder());
+    }
+
+    /**
+     * Returns the value whose selected key is maximal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return an {@link OptionalInt} describing the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     */
+    default <K> OptionalInt maxOptionalBy(
+        IntFunction<? extends K> keySelector,
+        Comparator<? super K> comparator
+    ) {
+        NullCheck.requireNonNull(keySelector);
+        NullCheck.requireNonNull(comparator);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int maxValue = enumerator.current();
+            K maxKey = keySelector.apply(maxValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                K currentKey = keySelector.apply(current);
+                if (comparator.compare(currentKey, maxKey) > 0) {
+                    maxValue = current;
+                    maxKey = currentKey;
+                }
+            }
+            return OptionalInt.of(maxValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code int} key is maximal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt maxOptionalByInt(IntUnaryOperator keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int maxValue = enumerator.current();
+            int maxKey = keySelector.applyAsInt(maxValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                int currentKey = keySelector.applyAsInt(current);
+                if (currentKey > maxKey) {
+                    maxValue = current;
+                    maxKey = currentKey;
+                }
+            }
+            return OptionalInt.of(maxValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code long} key is maximal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt maxOptionalByLong(IntToLongFunction keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int maxValue = enumerator.current();
+            long maxKey = keySelector.applyAsLong(maxValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                long currentKey = keySelector.applyAsLong(current);
+                if (currentKey > maxKey) {
+                    maxValue = current;
+                    maxKey = currentKey;
+                }
+            }
+            return OptionalInt.of(maxValue);
+        }
+    }
+
+    /**
+     * Returns the value whose selected {@code double} key is maximal if present.
+     *
+     * @param keySelector the function used to extract the comparison key from each value
+     * @return an {@link OptionalInt} describing the value whose selected key is maximal
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    default OptionalInt maxOptionalByDouble(IntToDoubleFunction keySelector) {
+        NullCheck.requireNonNull(keySelector);
+
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+
+            int maxValue = enumerator.current();
+            double maxKey = keySelector.applyAsDouble(maxValue);
+            while (enumerator.moveNext()) {
+                int current = enumerator.current();
+                double currentKey = keySelector.applyAsDouble(current);
+                if (Double.compare(currentKey, maxKey) > 0) {
+                    maxValue = current;
+                    maxKey = currentKey;
+                }
+            }
+            return OptionalInt.of(maxValue);
+        }
+    }
 
     /**
      * Calculates the sum of all values.
