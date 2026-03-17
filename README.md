@@ -208,7 +208,7 @@ Using Maven, add the following to your `pom.xml`:
 ```xml
 <dependency>
     <groupId>io.github.piscescup</groupId>
-    <artifactId>linq-in-java</artifactId>
+    <artifactId>linq-in-java2</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
@@ -216,7 +216,7 @@ Using Maven, add the following to your `pom.xml`:
 Using Gradle, add the following to your `build.gradle`:
 ```groovy
 dependencies {
-    implementation 'io.github.piscescup:linq-in-java:1.0.0'
+    implementation 'io.github.piscescup:linq-in-java2:1.0.0'
 }
 ```
 

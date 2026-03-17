@@ -12,15 +12,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -69,9 +61,7 @@ public class Linq<T> implements Enumerable<T> {
         NullCheck.requireNonNull(elements);
         return new Linq<>(() -> {
             List<T> result = new ArrayList<>(elements.length);
-            for (T element : elements) {
-                result.add(element);
-            }
+            Collections.addAll(result, elements);
             return result;
         });
     }
