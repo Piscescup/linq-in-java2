@@ -16,4 +16,19 @@ public interface PrimitiveEnumerable<T, SUB_PE extends PrimitiveEnumerable<T, SU
      * @return an {@link Enumerable} containing boxed wrapper values
      */
     Enumerable<T> boxed();
+
+    /**
+     * Orders values in ascending natural order.
+     *
+     * @return a {@code SUB_PE} whose values are ordered in ascending order
+     */
+    SUB_PE order();
+
+    /**
+     * Orders values in descending natural order.
+     *
+     * @return a {@code SUB_PE} whose values are ordered in descending order
+     */
+    SUB_PE orderDescending();
+
 }

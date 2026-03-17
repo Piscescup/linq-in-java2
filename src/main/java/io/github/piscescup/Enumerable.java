@@ -4,6 +4,7 @@ import io.github.piscescup.primitive.DoubleEnumerable;
 import io.github.piscescup.primitive.IntEnumerable;
 import io.github.piscescup.primitive.LongEnumerable;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.*;
@@ -72,6 +73,112 @@ public interface Enumerable<T> extends BaseEnumerable<T, Enumerable<T>> {
     <R> Enumerable<R> selectMany(
         Function<? super T, ? extends Enumerable<? extends R>> selector
     );
+
+    /**
+     * Orders elements by a comparable key in ascending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @param <K> the key type
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    <K extends Comparable<? super K>> OrderedEnumerable<T> orderBy(
+        Function<? super T, ? extends K> keySelector
+    );
+
+    /**
+     * Orders elements by a key using the supplied comparator.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     */
+    <K> OrderedEnumerable<T> orderBy(
+        Function<? super T, ? extends K> keySelector,
+        Comparator<? super K> comparator
+    );
+
+    /**
+     * Orders elements by an {@code int} key in ascending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByInt(ToIntFunction<? super T> keySelector);
+
+    /**
+     * Orders elements by a {@code long} key in ascending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByLong(ToLongFunction<? super T> keySelector);
+
+    /**
+     * Orders elements by a {@code double} key in ascending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByDouble(ToDoubleFunction<? super T> keySelector);
+
+    /**
+     * Orders elements by a comparable key in descending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @param <K> the key type
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    <K extends Comparable<? super K>> OrderedEnumerable<T> orderByDescending(
+        Function<? super T, ? extends K> keySelector
+    );
+
+    /**
+     * Orders elements by a key in descending order using the supplied comparator.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @param comparator the comparator used to compare extracted keys
+     * @param <K> the key type
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} or {@code comparator} is {@code null}
+     */
+    <K> OrderedEnumerable<T> orderByDescending(
+        Function<? super T, ? extends K> keySelector,
+        Comparator<? super K> comparator
+    );
+
+    /**
+     * Orders elements by an {@code int} key in descending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByIntDescending(ToIntFunction<? super T> keySelector);
+
+    /**
+     * Orders elements by a {@code long} key in descending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByLongDescending(ToLongFunction<? super T> keySelector);
+
+    /**
+     * Orders elements by a {@code double} key in descending order.
+     *
+     * @param keySelector the function used to extract the sort key from each element
+     * @return an {@link OrderedEnumerable} whose elements are ordered by the selected key
+     * @throws NullPointerException if {@code keySelector} is {@code null}
+     */
+    OrderedEnumerable<T> orderByDoubleDescending(ToDoubleFunction<? super T> keySelector);
 
     /**
      * Maps each element to an {@code int} value.
