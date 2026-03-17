@@ -20,7 +20,7 @@ package io.github.piscescup;
  * @since 1.0.0
  */
 public interface BaseEnumerable<T, SUB_BE extends BaseEnumerable<T, SUB_BE>>
-    extends InternalEnumerable<T>, AutoCloseable {
+    extends InternalEnumerable<T> {
 
     /**
      * Skips the first {@code count} elements.
@@ -59,12 +59,4 @@ public interface BaseEnumerable<T, SUB_BE extends BaseEnumerable<T, SUB_BE>>
      */
     long count();
 
-    /**
-     * Closes this sequence and releases any underlying resources.
-     *
-     * <p>The default implementation is a no-op.
-     */
-    @Override
-    default void close() {
-    }
 }
