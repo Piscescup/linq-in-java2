@@ -149,7 +149,8 @@ public class Linq<T> implements Enumerable<T> {
         NullCheck.requireNonNull(predicate);
         return new Linq<>(() -> {
             List<T> result = new ArrayList<>();
-            for (T element : snapshot()) {
+            List<T> snapshot = snapshot();
+            for (T element : snapshot) {
                 if (predicate.test(element)) {
                     result.add(element);
                 }
@@ -165,7 +166,7 @@ public class Linq<T> implements Enumerable<T> {
             List<T> result = new ArrayList<>();
             for (T element : snapshot()) {
                 if (!predicate.test(element)) {
-                    continue;
+                    break;
                 }
                 result.add(element);
             }
@@ -179,10 +180,12 @@ public class Linq<T> implements Enumerable<T> {
         return new Linq<>(() -> {
             List<T> source = snapshot();
             List<T> result = new ArrayList<>();
+            boolean skipping = true;
             for (T element : source) {
-                if (predicate.test(element)) {
+                if (skipping && predicate.test(element)) {
                     continue;
                 }
+                skipping = false;
                 result.add(element);
             }
             return result;

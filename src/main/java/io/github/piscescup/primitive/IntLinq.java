@@ -609,6 +609,11 @@ public final class IntLinq implements IntEnumerable {
     }
 
     @Override
+    public List<Integer> toList() {
+        return snapshot();
+    }
+
+    @Override
     public long count() {
         return snapshot().size();
     }

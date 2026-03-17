@@ -733,6 +733,11 @@ public final class DoubleLinq implements DoubleEnumerable {
         return result;
     }
 
+    @Override
+    public List<Double> toList() {
+        return snapshot();
+    }
+
     private List<Double> snapshot() {
         return new ArrayList<>(materializer.get());
     }

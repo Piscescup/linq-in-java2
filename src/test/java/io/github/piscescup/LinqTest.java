@@ -93,6 +93,21 @@ class LinqTest {
             new Person("ZhouKai", 28, "Xi'an"),
             new Person("WuDi", 41, "Tianjin")
         ));
+
+        int[] intArray = Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8)
+            .skip(5)
+            .toIntArray();
+        assertArrayEquals(new int[]{6, 7, 8}, intArray);
+
+        long[] longArray = Linq.ofLongs(10L, 20L, 30L, 40L, 50L)
+            .skip(3)
+            .toLongArray();
+        assertArrayEquals(new long[]{40L, 50L}, longArray);
+
+        double[] doubleArray = Linq.ofDoubles(1.1, 2.2, 3.3, 4.4, 5.5)
+            .skip(2)
+            .toDoubleArray();
+        assertArrayEquals(new double[]{3.3, 4.4, 5.5}, doubleArray);
     }
 
     @Test
@@ -107,6 +122,21 @@ class LinqTest {
             new Person("Charlie", 28, "Chicago"),
             new Person("David", 35, "Houston")
         ));
+
+        int[] intArray = Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8)
+            .take(5)
+            .toIntArray();
+        assertArrayEquals(new int[]{1, 2, 3, 4, 5}, intArray);
+
+        long[] longArray = Linq.ofLongs(10L, 20L, 30L, 40L, 50L)
+            .take(3)
+            .toLongArray();
+        assertArrayEquals(new long[]{10L, 20L, 30L}, longArray);
+
+        double[] doubleArray = Linq.ofDoubles(1.1, 2.2, 3.3, 4.4, 5.5)
+            .take(4)
+            .toDoubleArray();
+        assertArrayEquals(new double[]{1.1, 2.2, 3.3, 4.4}, doubleArray);
     }
 
     @Test
@@ -127,6 +157,8 @@ class LinqTest {
             new Person("SunTao", 34, "Chengdu"),
             new Person("WuDi", 41, "Tianjin")
         ));
+
+
     }
 
     @Test
@@ -148,6 +180,21 @@ class LinqTest {
             new Person("ZhaoMin", 25, "Wuhan"),
             new Person("ZhouKai", 28, "Xi'an")
         ));
+
+        List<Integer> integerList = Linq.ofInts(1, 3, 5, 7, 8, 10)
+            .takeWhileByInt(n -> n % 2 == 1)
+            .toList();
+        assertEquals(integerList, List.of(1, 3, 5, 7));
+
+        List<Long> longList = Linq.ofLongs(10L, 20L, 30L, 40L, 50L)
+            .takeWhileByLong(n -> n < 35L)
+            .toList();
+        assertEquals(longList, List.of(10L, 20L, 30L));
+
+        List<Double> doubleList = Linq.ofDoubles(1.1, 2.2, 3.3, 4.4, 5.5)
+            .takeWhileByDouble(n -> n < 4.0)
+            .toList();
+        assertEquals(doubleList, List.of(1.1, 2.2, 3.3));
     }
 
     @Test
@@ -173,19 +220,46 @@ class LinqTest {
 
     @Test
     void concat() {
-        Enumerable<Person> adult = Linq.fromIterable(PERSONS)
-            .where(p -> p.age >= 18);
+        Enumerable<Person> people1 = Linq.fromIterable(PERSONS)
+            .takeWhile(p -> p.age() < 30);
+        Enumerable<Person> people2 = Linq.fromIterable(PERSONS)
+            .skipWhile(p -> p.name.length() > 3);
 
-        Enumerable<Person> notNetEmail = Linq.fromIterable(PERSONS)
-            .skipWhile(p -> p.email().endsWith(EMAIL_SUFFIX[5]));
+        List<Person> people = people1.concat(people2)
+            .toList();
 
-        adult.concat(notNetEmail)
-            .forEach(System.out::println);
+        assertEquals(people, List.of(
+            // takeWhile(p -> p.age() < 30)
+            new Person("Alice", 23, "New York"),
 
+            // skipWhile(p -> p.name.length() > 3)
+            // new Person("Alice", 23, "New York"),
+            new Person("Bob", 30, "Los Angeles"),
+            new Person("Charlie", 28, "Chicago"),
+            new Person("David", 35, "Houston"),
+            new Person("Eve", 22, "San Francisco"),
+            new Person("Frank", 40, "Seattle"),
+            new Person("Grace", 27, "Boston"),
+            new Person("Hank", 33, "Denver"),
+            new Person("Ivy", 26, "Austin"),
+            new Person("Jack", 31, "Miami"),
+
+            new Person("LiHua", 24, "Beijing"),
+            new Person("ZhangWei", 29, "Shanghai"),
+            new Person("WangFang", 32, "Guangzhou"),
+            new Person("LiuYang", 21, "Shenzhen"),
+            new Person("ChenJie", 36, "Hangzhou"),
+            new Person("YangLei", 38, "Nanjing"),
+            new Person("ZhaoMin", 25, "Wuhan"),
+            new Person("SunTao", 34, "Chengdu"),
+            new Person("ZhouKai", 28, "Xi'an"),
+            new Person("WuDi", 41, "Tianjin")
+        ));
     }
 
     @Test
     void append() {
+
     }
 
     @Test

@@ -734,6 +734,11 @@ public final class LongLinq implements LongEnumerable {
         return result;
     }
 
+    @Override
+    public List<Long> toList() {
+        return snapshot();
+    }
+
     private List<Long> snapshot() {
         return new ArrayList<>(materializer.get());
     }

@@ -1,5 +1,7 @@
 package io.github.piscescup;
 
+import java.util.List;
+
 /**
  * Represents the shared abstraction of all LINQ-style sequences.
  *
@@ -58,5 +60,11 @@ public interface BaseEnumerable<T, SUB_BE extends BaseEnumerable<T, SUB_BE>>
      * @return the element count
      */
     long count();
+
+    /**
+     * Collects the elements of the sequence into a {@link List}.
+     * @return a {@link List} contains the elements of the sequence
+     */
+    List<T> toList();
 
 }
