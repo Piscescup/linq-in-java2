@@ -1,5 +1,6 @@
 package io.github.piscescup;
 
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,10 +21,14 @@ class LinqTest {
     };
 
     record Person(String name, int age, String address) {
-
         public String email() {
             String emailSuf = EMAIL_SUFFIX[new Random().nextInt(0, EMAIL_SUFFIX.length)];
             return name.toLowerCase() + age + emailSuf;
+        }
+
+        @Override
+        public @NonNull String toString() {
+            return name + ", " + age + ", email: " + email();
         }
     }
 
@@ -54,6 +59,13 @@ class LinqTest {
 
     @Test
     void enumerator() {
+        Enumerable<Person> people = Linq.fromIterable(PERSONS);
+        try (Enumerator<Person> enumerator = people.enumerator()) {
+            while (enumerator.moveNext()) {
+                Person p = enumerator.current();
+                System.out.println(p.email());
+            }
+        }
     }
 
     @Test
@@ -161,6 +173,15 @@ class LinqTest {
 
     @Test
     void concat() {
+        Enumerable<Person> adult = Linq.fromIterable(PERSONS)
+            .where(p -> p.age >= 18);
+
+        Enumerable<Person> notNetEmail = Linq.fromIterable(PERSONS)
+            .skipWhile(p -> p.email().endsWith(EMAIL_SUFFIX[5]));
+
+        adult.concat(notNetEmail)
+            .forEach(System.out::println);
+
     }
 
     @Test
@@ -253,14 +274,33 @@ class LinqTest {
 
     @Test
     void mapToInt() {
+        int[] array = Linq.fromIterable(PERSONS)
+            .mapToInt(Person::age)
+            .whereByInt(age -> age >= 30)
+            .toIntArray();
+
+        assertArrayEquals(new int[] {30, 35, 40, 33, 31, 32, 36, 38, 34, 41}, array);
     }
 
     @Test
     void mapToLong() {
+        long[] array = Linq.fromIterable(PERSONS)
+            .mapToLong(person -> person.age() * 10L)
+            .take(3)
+            .toLongArray();
+
+        assertArrayEquals(new long[] {230L, 300L, 280L}, array);
     }
 
     @Test
     void mapToDouble() {
+        double[] array = Linq.fromIterable(PERSONS)
+            .mapToDouble(person -> person.age() / 10.0)
+            .skip(2)
+            .take(3)
+            .toDoubleArray();
+
+        assertArrayEquals(new double[] {2.8, 3.5, 2.2}, array);
     }
 
     @Test
