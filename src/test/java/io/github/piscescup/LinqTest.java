@@ -1,9 +1,7 @@
 package io.github.piscescup;
 
-import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -60,7 +58,7 @@ class LinqTest {
 
     @Test
     void skip() {
-        List<Person> list = Linq.from(PERSONS)
+        List<Person> list = Linq.fromIterable(PERSONS)
             .skip(4)
             .toList();
 
@@ -87,7 +85,7 @@ class LinqTest {
 
     @Test
     void take() {
-        List<Person> list = Linq.from(PERSONS)
+        List<Person> list = Linq.fromIterable(PERSONS)
             .take(4)
             .toList();
 
@@ -101,7 +99,7 @@ class LinqTest {
 
     @Test
     void where() {
-        List<Person> list = Linq.from(PERSONS)
+        List<Person> list = Linq.fromIterable(PERSONS)
             .where(p -> p.age() > 30)
             .toList();
 
@@ -121,7 +119,7 @@ class LinqTest {
 
     @Test
     void takeWhile() {
-        List<Person> list = Linq.from(PERSONS)
+        List<Person> list = Linq.fromIterable(PERSONS)
             .takeWhile(p -> p.age() < 30)
             .toList();
 
@@ -142,7 +140,7 @@ class LinqTest {
 
     @Test
     void skipWhile() {
-        List<Person> list = Linq.from(PERSONS)
+        List<Person> list = Linq.fromIterable(PERSONS)
             .skipWhile(p -> p.age() < 30)
             .toList();
 

@@ -8,8 +8,9 @@ import io.github.piscescup.primitive.DoubleEnumerable;
 import io.github.piscescup.primitive.IntEnumerable;
 import io.github.piscescup.primitive.LongEnumerable;
 import io.github.piscescup.util.validation.NullCheck;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -49,14 +50,20 @@ public class Linq<T> implements Enumerable<T> {
         this.materializer = materializer;
     }
 
-    public static <T> Linq<T> from(InternalEnumerable<? extends T> source) {
+    @NotNull
+    @Contract("_ -> new")
+    public static <T> Linq<T> fromEnumerable(InternalEnumerable<? extends T> source) {
         return new Linq<>(source);
     }
 
-    public static <T> Linq<T> from(Iterable<? extends T> source) {
+    @NotNull
+    @Contract("_ -> new")
+    public static <T> Linq<T> fromIterable(Iterable<? extends T> source) {
         return new Linq<>(source);
     }
 
+    @NotNull
+    @Contract("_ -> new")
     @SafeVarargs
     public static <T> Linq<T> of(T... elements) {
         NullCheck.requireNonNull(elements);
@@ -69,6 +76,8 @@ public class Linq<T> implements Enumerable<T> {
         });
     }
 
+    @NotNull
+    @Contract(value = "_ -> new", pure = true)
     private static <T> Linq<T> fromList(List<? extends T> source) {
         return new Linq<>(() -> new ArrayList<>(source));
     }
