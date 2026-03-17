@@ -4,8 +4,11 @@ import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.Equalator;
 import io.github.piscescup.interfaces.exfunction.BinFunction;
+import io.github.piscescup.primitive.DoubleLinq;
 import io.github.piscescup.primitive.DoubleEnumerable;
+import io.github.piscescup.primitive.IntLinq;
 import io.github.piscescup.primitive.IntEnumerable;
+import io.github.piscescup.primitive.LongLinq;
 import io.github.piscescup.primitive.LongEnumerable;
 import io.github.piscescup.util.validation.NullCheck;
 import org.jetbrains.annotations.Contract;
@@ -44,20 +47,20 @@ public class Linq<T> implements Enumerable<T> {
 
     @NotNull
     @Contract("_ -> new")
-    public static <T> Linq<T> fromEnumerable(InternalEnumerable<? extends T> source) {
+    public static <T> Enumerable<T> fromEnumerable(InternalEnumerable<? extends T> source) {
         return new Linq<>(source);
     }
 
     @NotNull
     @Contract("_ -> new")
-    public static <T> Linq<T> fromIterable(Iterable<? extends T> source) {
+    public static <T> Enumerable<T> fromIterable(Iterable<? extends T> source) {
         return new Linq<>(source);
     }
 
     @NotNull
     @Contract("_ -> new")
     @SafeVarargs
-    public static <T> Linq<T> of(T... elements) {
+    public static <T> Enumerable<T> of(T... elements) {
         NullCheck.requireNonNull(elements);
         return new Linq<>(() -> {
             List<T> result = new ArrayList<>(elements.length);
@@ -67,8 +70,44 @@ public class Linq<T> implements Enumerable<T> {
     }
 
     @NotNull
+    @Contract("_ -> new")
+    public static IntEnumerable ofInts(int... ints) {
+        return new IntLinq(ints);
+    }
+
+    @NotNull
+    @Contract("_ -> new")
+    public static LongEnumerable ofLongs(long... longs) {
+        return new LongLinq(longs);
+    }
+
+    @NotNull
+    @Contract("_ -> new")
+    public static DoubleEnumerable ofDoubles(double... doubles) {
+        return new DoubleLinq(doubles);
+    }
+
+    @NotNull
+    @Contract("_ -> new")
+    public static IntEnumerable ofInts(Iterable<Integer> ints) {
+        return new IntLinq(ints);
+    }
+
+    @NotNull
+    @Contract("_ -> new")
+    public static LongEnumerable ofLongs(Iterable<Long> longs) {
+        return new LongLinq(longs);
+    }
+
+    @NotNull
+    @Contract("_ -> new")
+    public static DoubleEnumerable ofDoubles(Iterable<Double> doubles) {
+        return new DoubleLinq(doubles);
+    }
+
+    @NotNull
     @Contract(value = "_ -> new", pure = true)
-    private static <T> Linq<T> fromList(List<? extends T> source) {
+    private static <T> Enumerable<T> fromList(List<? extends T> source) {
         return new Linq<>(() -> new ArrayList<>(source));
     }
 
@@ -110,7 +149,8 @@ public class Linq<T> implements Enumerable<T> {
         NullCheck.requireNonNull(predicate);
         return new Linq<>(() -> {
             List<T> result = new ArrayList<>();
-            for (T element : snapshot()) {
+            List<T> snapshot = snapshot();
+            for (T element : snapshot) {
                 if (predicate.test(element)) {
                     result.add(element);
                 }
@@ -126,7 +166,7 @@ public class Linq<T> implements Enumerable<T> {
             List<T> result = new ArrayList<>();
             for (T element : snapshot()) {
                 if (!predicate.test(element)) {
-                    continue;
+                    break;
                 }
                 result.add(element);
             }
@@ -140,10 +180,12 @@ public class Linq<T> implements Enumerable<T> {
         return new Linq<>(() -> {
             List<T> source = snapshot();
             List<T> result = new ArrayList<>();
+            boolean skipping = true;
             for (T element : source) {
-                if (predicate.test(element)) {
+                if (skipping && predicate.test(element)) {
                     continue;
                 }
+                skipping = false;
                 result.add(element);
             }
             return result;
@@ -365,19 +407,37 @@ public class Linq<T> implements Enumerable<T> {
     @Override
     public IntEnumerable mapToInt(ToIntFunction<? super T> selector) {
         NullCheck.requireNonNull(selector);
-        throw new UnsupportedOperationException("Primitive enumerable implementation has not been added yet.");
+        return new IntLinq(() -> {
+            List<Integer> result = new ArrayList<>();
+            for (T element : snapshot()) {
+                result.add(selector.applyAsInt(element));
+            }
+            return result;
+        });
     }
 
     @Override
     public LongEnumerable mapToLong(ToLongFunction<? super T> selector) {
         NullCheck.requireNonNull(selector);
-        throw new UnsupportedOperationException("Primitive enumerable implementation has not been added yet.");
+        return new LongLinq(() -> {
+            List<Long> result = new ArrayList<>();
+            for (T element : snapshot()) {
+                result.add(selector.applyAsLong(element));
+            }
+            return result;
+        });
     }
 
     @Override
     public DoubleEnumerable mapToDouble(ToDoubleFunction<? super T> selector) {
         NullCheck.requireNonNull(selector);
-        throw new UnsupportedOperationException("Primitive enumerable implementation has not been added yet.");
+        return new DoubleLinq(() -> {
+            List<Double> result = new ArrayList<>();
+            for (T element : snapshot()) {
+                result.add(selector.applyAsDouble(element));
+            }
+            return result;
+        });
     }
 
     @Override
