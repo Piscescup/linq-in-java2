@@ -1,9 +1,10 @@
-package io.github.piscescup.primitive;
+package io.github.piscescup.linq4j2.primitive;
 
-import io.github.piscescup.Enumerable;
-import io.github.piscescup.Enumerator;
-import io.github.piscescup.Groupable;
-import io.github.piscescup.Linq;
+import io.github.piscescup.linq4j2.AbstractEnumerator;
+import io.github.piscescup.linq4j2.Enumerable;
+import io.github.piscescup.linq4j2.Enumerator;
+import io.github.piscescup.linq4j2.Groupable;
+import io.github.piscescup.linq4j2.Linq;
 import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.Equalator;
@@ -28,16 +29,43 @@ import java.util.function.DoubleUnaryOperator;
 import java.util.function.Supplier;
 
 public final class DoubleLinq implements DoubleEnumerable {
-    private final Supplier<List<Double>> materializer;
+    private final Supplier<? extends Enumerator<Double>> factory;
+    private final Supplier<List<Double>> listFactory;
 
     public DoubleLinq(Iterable<Double> source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> materialize(source);
+        if (source instanceof List<Double> list) {
+            this.factory = () -> new ListEnumerator(uncheckedListCopy(list));
+            this.listFactory = () -> uncheckedListCopy(list);
+            return;
+        }
+        this.factory = () -> enumeratorOf(source.iterator());
+        if (source instanceof Collection<Double> collection) {
+            this.listFactory = () -> new ArrayList<>(collection);
+        } else {
+            this.listFactory = () -> materialize(factory);
+        }
     }
 
     public DoubleLinq(double[] source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> {
+        this.factory = () -> new AbstractEnumerator<>() {
+            private int index;
+
+            @Override
+            protected boolean computeNext() {
+                if (index >= source.length) {
+                    return end();
+                }
+                return yieldValue(source[index++]);
+            }
+
+            @Override
+            public void reset() {
+                index = 0;
+            }
+        };
+        this.listFactory = () -> {
             List<Double> result = new ArrayList<>(source.length);
             for (double value : source) {
                 result.add(value);
@@ -47,12 +75,17 @@ public final class DoubleLinq implements DoubleEnumerable {
     }
 
     public DoubleLinq(Supplier<List<Double>> materializer) {
-        this.materializer = materializer;
+        this(() -> new ListEnumerator(materializer.get()), materializer);
+    }
+
+    private DoubleLinq(Supplier<? extends Enumerator<Double>> factory, Supplier<List<Double>> listFactory) {
+        this.factory = factory;
+        this.listFactory = listFactory;
     }
 
     @Override
     public Enumerator<Double> enumerator() {
-        return new ListEnumerator(snapshot());
+        return factory.get();
     }
 
     @Override
@@ -564,38 +597,71 @@ public final class DoubleLinq implements DoubleEnumerable {
 
     @Override
     public DoubleEnumerable distinct() {
-        return new DoubleLinq(() -> {
+        return new DoubleLinq(() -> new AbstractEnumerator<>() {
+            private final Enumerator<Double> source = DoubleLinq.this.enumerator();
+            private final Set<Double> seen = new LinkedHashSet<>();
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    double value = source.current();
+                    if (seen.add(value)) {
+                        return yieldValue(value);
+                    }
+                }
+                return end();
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
+        }, () -> {
             List<Double> result = new ArrayList<>();
-            addDistinct(result, snapshot(), DoubleLinq::defaultEquals);
+            Set<Double> seen = new LinkedHashSet<>();
+            try (Enumerator<Double> source = DoubleLinq.this.enumerator()) {
+                while (source.moveNext()) {
+                    double value = source.current();
+                    if (seen.add(value)) {
+                        result.add(value);
+                    }
+                }
+            }
             return result;
         });
     }
 
     @Override
     public boolean any() {
-        return !snapshot().isEmpty();
+        try (Enumerator<Double> enumerator = enumerator()) {
+            return enumerator.moveNext();
+        }
     }
 
     @Override
     public boolean anyByDouble(DoublePredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (Double value : snapshot()) {
-            if (predicate.test(value)) {
-                return true;
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
     }
 
     @Override
     public boolean allByDouble(DoublePredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (Double value : snapshot()) {
-            if (!predicate.test(value)) {
-                return false;
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (!predicate.test(enumerator.current())) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
     }
 
     @Override
@@ -607,9 +673,11 @@ public final class DoubleLinq implements DoubleEnumerable {
     public long countByDouble(DoublePredicate predicate) {
         NullCheck.requireNonNull(predicate);
         long count = 0;
-        for (Double value : snapshot()) {
-            if (predicate.test(value)) {
-                count++;
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    count++;
+                }
             }
         }
         return count;
@@ -617,15 +685,24 @@ public final class DoubleLinq implements DoubleEnumerable {
 
     @Override
     public boolean contains(double value) {
-        return snapshot().contains(value);
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (Double.compare(enumerator.current(), value) == 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     @Override
     public <A> A aggregate(A seed, BiFunction<? super A, ? super Double, ? extends A> aggregator) {
         NullCheck.requireNonNull(aggregator);
         A result = seed;
-        for (Double value : snapshot()) {
-            result = aggregator.apply(result, value);
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                result = aggregator.apply(result, enumerator.current());
+            }
         }
         return result;
     }
@@ -670,8 +747,10 @@ public final class DoubleLinq implements DoubleEnumerable {
     @Override
     public double sum() {
         double sum = 0;
-        for (Double value : snapshot()) {
-            sum += value;
+        try (Enumerator<Double> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+            }
         }
         return sum;
     }
@@ -683,8 +762,15 @@ public final class DoubleLinq implements DoubleEnumerable {
 
     @Override
     public OptionalDouble averageOptional() {
-        List<Double> source = snapshot();
-        return source.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(sum() / source.size());
+        try (Enumerator<Double> enumerator = enumerator()) {
+            long count = 0;
+            double sum = 0;
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+                count++;
+            }
+            return count == 0 ? OptionalDouble.empty() : OptionalDouble.of(sum / count);
+        }
     }
 
     @Override
@@ -694,15 +780,16 @@ public final class DoubleLinq implements DoubleEnumerable {
 
     @Override
     public OptionalDouble minOptional() {
-        List<Double> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalDouble.empty();
+        try (Enumerator<Double> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalDouble.empty();
+            }
+            double best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.min(best, enumerator.current());
+            }
+            return OptionalDouble.of(best);
         }
-        double best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.min(best, source.get(i));
-        }
-        return OptionalDouble.of(best);
     }
 
     @Override
@@ -712,15 +799,16 @@ public final class DoubleLinq implements DoubleEnumerable {
 
     @Override
     public OptionalDouble maxOptional() {
-        List<Double> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalDouble.empty();
+        try (Enumerator<Double> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalDouble.empty();
+            }
+            double best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.max(best, enumerator.current());
+            }
+            return OptionalDouble.of(best);
         }
-        double best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.max(best, source.get(i));
-        }
-        return OptionalDouble.of(best);
     }
 
     @Override
@@ -739,7 +827,7 @@ public final class DoubleLinq implements DoubleEnumerable {
     }
 
     private List<Double> snapshot() {
-        return new ArrayList<>(materializer.get());
+        return listFactory.get();
     }
 
     private List<Double> filter(DoublePredicate predicate) {
@@ -787,6 +875,32 @@ public final class DoubleLinq implements DoubleEnumerable {
             result.add(element);
         }
         return result;
+    }
+
+    private static List<Double> materialize(Supplier<? extends Enumerator<Double>> factory) {
+        List<Double> result = new ArrayList<>();
+        try (Enumerator<Double> enumerator = factory.get()) {
+            while (enumerator.moveNext()) {
+                result.add(enumerator.current());
+            }
+        }
+        return result;
+    }
+
+    private static Enumerator<Double> enumeratorOf(java.util.Iterator<Double> iterator) {
+        return new AbstractEnumerator<>() {
+            @Override
+            protected boolean computeNext() {
+                if (!iterator.hasNext()) {
+                    return end();
+                }
+                return yieldValue(iterator.next());
+            }
+        };
+    }
+
+    private static List<Double> uncheckedListCopy(List<Double> source) {
+        return new ArrayList<>(source);
     }
 
     private static List<Double> toList(DoubleEnumerable enumerable) {
@@ -870,69 +984,25 @@ public final class DoubleLinq implements DoubleEnumerable {
         }
     }
 
-    private static final class ListEnumerator implements Enumerator<Double> {
+    private static final class ListEnumerator extends AbstractEnumerator<Double> {
         private final List<Double> elements;
-        private int index = -1;
-        private boolean prepared;
+        private int index;
 
         private ListEnumerator(List<Double> elements) {
             this.elements = elements;
         }
 
         @Override
-        public boolean moveNext() {
-            if (index + 1 >= elements.size()) {
-                index = elements.size();
-                prepared = false;
-                return false;
+        protected boolean computeNext() {
+            if (index >= elements.size()) {
+                return end();
             }
-            index++;
-            prepared = true;
-            return true;
-        }
-
-        @Override
-        public Double current() {
-            if (!prepared || index < 0 || index >= elements.size()) {
-                throw new IllegalStateException("Enumerator is not positioned on an element.");
-            }
-            return elements.get(index);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return index + 1 < elements.size();
-        }
-
-        @Override
-        public Double next() {
-            if (!moveNext()) {
-                throw new NoSuchElementException();
-            }
-            return current();
-        }
-
-        @Override
-        public void forEachRemaining(java.util.function.Consumer<? super Double> action) {
-            NullCheck.requireNonNull(action);
-            while (moveNext()) {
-                action.accept(current());
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+            return yieldValue(elements.get(index++));
         }
 
         @Override
         public void reset() {
-            index = -1;
-            prepared = false;
-        }
-
-        @Override
-        public void close() {
+            index = 0;
         }
     }
 

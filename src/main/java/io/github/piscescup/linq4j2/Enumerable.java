@@ -1,11 +1,11 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.exfunction.BinFunction;
-import io.github.piscescup.primitive.DoubleEnumerable;
-import io.github.piscescup.primitive.IntEnumerable;
-import io.github.piscescup.primitive.LongEnumerable;
+import io.github.piscescup.linq4j2.primitive.DoubleEnumerable;
+import io.github.piscescup.linq4j2.primitive.IntEnumerable;
+import io.github.piscescup.linq4j2.primitive.LongEnumerable;
 import io.github.piscescup.interfaces.Equalator;
 import io.github.piscescup.util.validation.NullCheck;
 

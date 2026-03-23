@@ -1,4 +1,4 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import java.util.List;
 
@@ -12,6 +12,10 @@ import java.util.List;
  * @since 1.0.0
  */
 public final class ReadOnlyGroup<K, E> extends AbstractGroup<K, E> {
+
+    public ReadOnlyGroup(K key, List<E> value) {
+        super(key, value);
+    }
 
     /**
      * Unsupported Operation!
