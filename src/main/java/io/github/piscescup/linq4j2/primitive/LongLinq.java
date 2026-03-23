@@ -1,9 +1,10 @@
-package io.github.piscescup.primitive;
+package io.github.piscescup.linq4j2.primitive;
 
-import io.github.piscescup.Enumerable;
-import io.github.piscescup.Enumerator;
-import io.github.piscescup.Groupable;
-import io.github.piscescup.Linq;
+import io.github.piscescup.linq4j2.AbstractEnumerator;
+import io.github.piscescup.linq4j2.Enumerable;
+import io.github.piscescup.linq4j2.Enumerator;
+import io.github.piscescup.linq4j2.Groupable;
+import io.github.piscescup.linq4j2.Linq;
 import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.Equalator;
@@ -29,16 +30,43 @@ import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 
 public final class LongLinq implements LongEnumerable {
-    private final Supplier<List<Long>> materializer;
+    private final Supplier<? extends Enumerator<Long>> factory;
+    private final Supplier<List<Long>> listFactory;
 
     public LongLinq(Iterable<Long> source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> materialize(source);
+        if (source instanceof List<Long> list) {
+            this.factory = () -> new ListEnumerator(uncheckedListCopy(list));
+            this.listFactory = () -> uncheckedListCopy(list);
+            return;
+        }
+        this.factory = () -> enumeratorOf(source.iterator());
+        if (source instanceof Collection<Long> collection) {
+            this.listFactory = () -> new ArrayList<>(collection);
+        } else {
+            this.listFactory = () -> materialize(factory);
+        }
     }
 
     public LongLinq(long[] source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> {
+        this.factory = () -> new AbstractEnumerator<>() {
+            private int index;
+
+            @Override
+            protected boolean computeNext() {
+                if (index >= source.length) {
+                    return end();
+                }
+                return yieldValue(source[index++]);
+            }
+
+            @Override
+            public void reset() {
+                index = 0;
+            }
+        };
+        this.listFactory = () -> {
             List<Long> result = new ArrayList<>(source.length);
             for (long value : source) {
                 result.add(value);
@@ -48,12 +76,17 @@ public final class LongLinq implements LongEnumerable {
     }
 
     public LongLinq(Supplier<List<Long>> materializer) {
-        this.materializer = materializer;
+        this(() -> new ListEnumerator(materializer.get()), materializer);
+    }
+
+    private LongLinq(Supplier<? extends Enumerator<Long>> factory, Supplier<List<Long>> listFactory) {
+        this.factory = factory;
+        this.listFactory = listFactory;
     }
 
     @Override
     public Enumerator<Long> enumerator() {
-        return new ListEnumerator(snapshot());
+        return factory.get();
     }
 
     @Override
@@ -565,38 +598,71 @@ public final class LongLinq implements LongEnumerable {
 
     @Override
     public LongEnumerable distinct() {
-        return new LongLinq(() -> {
+        return new LongLinq(() -> new AbstractEnumerator<>() {
+            private final Enumerator<Long> source = LongLinq.this.enumerator();
+            private final Set<Long> seen = new LinkedHashSet<>();
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    long value = source.current();
+                    if (seen.add(value)) {
+                        return yieldValue(value);
+                    }
+                }
+                return end();
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
+        }, () -> {
             List<Long> result = new ArrayList<>();
-            addDistinct(result, snapshot(), LongLinq::defaultEquals);
+            Set<Long> seen = new LinkedHashSet<>();
+            try (Enumerator<Long> source = LongLinq.this.enumerator()) {
+                while (source.moveNext()) {
+                    long value = source.current();
+                    if (seen.add(value)) {
+                        result.add(value);
+                    }
+                }
+            }
             return result;
         });
     }
 
     @Override
     public boolean any() {
-        return !snapshot().isEmpty();
+        try (Enumerator<Long> enumerator = enumerator()) {
+            return enumerator.moveNext();
+        }
     }
 
     @Override
     public boolean anyByLong(LongPredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (Long value : snapshot()) {
-            if (predicate.test(value)) {
-                return true;
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
     }
 
     @Override
     public boolean allByLong(LongPredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (Long value : snapshot()) {
-            if (!predicate.test(value)) {
-                return false;
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (!predicate.test(enumerator.current())) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
     }
 
     @Override
@@ -608,9 +674,11 @@ public final class LongLinq implements LongEnumerable {
     public long countByLong(LongPredicate predicate) {
         NullCheck.requireNonNull(predicate);
         long count = 0;
-        for (Long value : snapshot()) {
-            if (predicate.test(value)) {
-                count++;
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    count++;
+                }
             }
         }
         return count;
@@ -618,15 +686,24 @@ public final class LongLinq implements LongEnumerable {
 
     @Override
     public boolean contains(long value) {
-        return snapshot().contains(value);
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (enumerator.current() == value) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     @Override
     public <A> A aggregate(A seed, BiFunction<? super A, ? super Long, ? extends A> aggregator) {
         NullCheck.requireNonNull(aggregator);
         A result = seed;
-        for (Long value : snapshot()) {
-            result = aggregator.apply(result, value);
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                result = aggregator.apply(result, enumerator.current());
+            }
         }
         return result;
     }
@@ -671,8 +748,10 @@ public final class LongLinq implements LongEnumerable {
     @Override
     public long sum() {
         long sum = 0;
-        for (Long value : snapshot()) {
-            sum += value;
+        try (Enumerator<Long> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+            }
         }
         return sum;
     }
@@ -684,8 +763,15 @@ public final class LongLinq implements LongEnumerable {
 
     @Override
     public OptionalDouble averageOptional() {
-        List<Long> source = snapshot();
-        return source.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of((double) sum() / source.size());
+        try (Enumerator<Long> enumerator = enumerator()) {
+            long count = 0;
+            double sum = 0;
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+                count++;
+            }
+            return count == 0 ? OptionalDouble.empty() : OptionalDouble.of(sum / count);
+        }
     }
 
     @Override
@@ -695,15 +781,16 @@ public final class LongLinq implements LongEnumerable {
 
     @Override
     public OptionalLong minOptional() {
-        List<Long> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalLong.empty();
+        try (Enumerator<Long> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalLong.empty();
+            }
+            long best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.min(best, enumerator.current());
+            }
+            return OptionalLong.of(best);
         }
-        long best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.min(best, source.get(i));
-        }
-        return OptionalLong.of(best);
     }
 
     @Override
@@ -713,15 +800,16 @@ public final class LongLinq implements LongEnumerable {
 
     @Override
     public OptionalLong maxOptional() {
-        List<Long> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalLong.empty();
+        try (Enumerator<Long> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalLong.empty();
+            }
+            long best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.max(best, enumerator.current());
+            }
+            return OptionalLong.of(best);
         }
-        long best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.max(best, source.get(i));
-        }
-        return OptionalLong.of(best);
     }
 
     @Override
@@ -740,7 +828,7 @@ public final class LongLinq implements LongEnumerable {
     }
 
     private List<Long> snapshot() {
-        return new ArrayList<>(materializer.get());
+        return listFactory.get();
     }
 
     private List<Long> filter(LongPredicate predicate) {
@@ -788,6 +876,32 @@ public final class LongLinq implements LongEnumerable {
             result.add(element);
         }
         return result;
+    }
+
+    private static List<Long> materialize(Supplier<? extends Enumerator<Long>> factory) {
+        List<Long> result = new ArrayList<>();
+        try (Enumerator<Long> enumerator = factory.get()) {
+            while (enumerator.moveNext()) {
+                result.add(enumerator.current());
+            }
+        }
+        return result;
+    }
+
+    private static Enumerator<Long> enumeratorOf(java.util.Iterator<Long> iterator) {
+        return new AbstractEnumerator<>() {
+            @Override
+            protected boolean computeNext() {
+                if (!iterator.hasNext()) {
+                    return end();
+                }
+                return yieldValue(iterator.next());
+            }
+        };
+    }
+
+    private static List<Long> uncheckedListCopy(List<Long> source) {
+        return new ArrayList<>(source);
     }
 
     private static List<Long> toList(LongEnumerable enumerable) {
@@ -871,69 +985,25 @@ public final class LongLinq implements LongEnumerable {
         }
     }
 
-    private static final class ListEnumerator implements Enumerator<Long> {
+    private static final class ListEnumerator extends AbstractEnumerator<Long> {
         private final List<Long> elements;
-        private int index = -1;
-        private boolean prepared;
+        private int index;
 
         private ListEnumerator(List<Long> elements) {
             this.elements = elements;
         }
 
         @Override
-        public boolean moveNext() {
-            if (index + 1 >= elements.size()) {
-                index = elements.size();
-                prepared = false;
-                return false;
+        protected boolean computeNext() {
+            if (index >= elements.size()) {
+                return end();
             }
-            index++;
-            prepared = true;
-            return true;
-        }
-
-        @Override
-        public Long current() {
-            if (!prepared || index < 0 || index >= elements.size()) {
-                throw new IllegalStateException("Enumerator is not positioned on an element.");
-            }
-            return elements.get(index);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return index + 1 < elements.size();
-        }
-
-        @Override
-        public Long next() {
-            if (!moveNext()) {
-                throw new NoSuchElementException();
-            }
-            return current();
-        }
-
-        @Override
-        public void forEachRemaining(java.util.function.Consumer<? super Long> action) {
-            NullCheck.requireNonNull(action);
-            while (moveNext()) {
-                action.accept(current());
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+            return yieldValue(elements.get(index++));
         }
 
         @Override
         public void reset() {
-            index = -1;
-            prepared = false;
-        }
-
-        @Override
-        public void close() {
+            index = 0;
         }
     }
 

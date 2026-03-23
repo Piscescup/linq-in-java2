@@ -1,7 +1,7 @@
-package io.github.piscescup.primitive;
+package io.github.piscescup.linq4j2.primitive;
 
 
-import io.github.piscescup.Enumerable;
+import io.github.piscescup.linq4j2.Enumerable;
 
 /**
  * Shared contract for primitive-specialized enumerable types.

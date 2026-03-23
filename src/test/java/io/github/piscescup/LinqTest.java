@@ -1,8 +1,12 @@
 package io.github.piscescup;
 
+import io.github.piscescup.linq4j2.Enumerable;
+import io.github.piscescup.linq4j2.Enumerator;
+import io.github.piscescup.linq4j2.Linq;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -259,15 +263,131 @@ class LinqTest {
 
     @Test
     void append() {
+        List<Person> list = Linq.fromIterable(PERSONS)
+            .append(new Person("ZhangSan", 27, "Shenyang"))
+            .toList();
+
+        assertEquals(list, List.of(
+            new Person("Alice", 23, "New York"),
+            new Person("Bob", 30, "Los Angeles"),
+            new Person("Charlie", 28, "Chicago"),
+            new Person("David", 35, "Houston"),
+            new Person("Eve", 22, "San Francisco"),
+            new Person("Frank", 40, "Seattle"),
+            new Person("Grace", 27, "Boston"),
+            new Person("Hank", 33, "Denver"),
+            new Person("Ivy", 26, "Austin"),
+            new Person("Jack", 31, "Miami"),
+
+            new Person("LiHua", 24, "Beijing"),
+            new Person("ZhangWei", 29, "Shanghai"),
+            new Person("WangFang", 32, "Guangzhou"),
+            new Person("LiuYang", 21, "Shenzhen"),
+            new Person("ChenJie", 36, "Hangzhou"),
+            new Person("YangLei", 38, "Nanjing"),
+            new Person("ZhaoMin", 25, "Wuhan"),
+            new Person("SunTao", 34, "Chengdu"),
+            new Person("ZhouKai", 28, "Xi'an"),
+            new Person("WuDi", 41, "Tianjin"),
+            new Person("ZhangSan", 27, "Shenyang")
+        ));
+
+        List<Integer> integerList = Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+            .append(11)
+            .toList();
+        assertEquals(integerList, List.of(
+            1, 2 ,3, 4, 5, 6, 7, 8, 9, 10, 11
+        ));
+
+        List<Long> longList = Linq.ofLongs(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L)
+            .append(11)
+            .toList();
+        assertEquals(longList, List.of(
+            1L, 2L ,3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L
+        ));
+
+        List<Double> doubleList = Linq.ofDoubles(1.1, 2.2, 3.3, 4.4, 5.5)
+            .append(6.6)
+            .toList();
+        assertEquals(doubleList, List.of(
+            1.1, 2.2, 3.3, 4.4, 5.5,  6.6
+        ));
 
     }
 
     @Test
     void prepend() {
+        List<Person> list = Linq.fromIterable(PERSONS)
+            .prepend(new Person("ZhangSan", 27, "Shenyang"))
+            .toList();
+
+        assertEquals(list, List.of(
+            new Person("ZhangSan", 27, "Shenyang"),
+        new Person("Alice", 23, "New York"),
+        new Person("Bob", 30, "Los Angeles"),
+        new Person("Charlie", 28, "Chicago"),
+        new Person("David", 35, "Houston"),
+        new Person("Eve", 22, "San Francisco"),
+        new Person("Frank", 40, "Seattle"),
+        new Person("Grace", 27, "Boston"),
+        new Person("Hank", 33, "Denver"),
+        new Person("Ivy", 26, "Austin"),
+        new Person("Jack", 31, "Miami"),
+
+        new Person("LiHua", 24, "Beijing"),
+        new Person("ZhangWei", 29, "Shanghai"),
+        new Person("WangFang", 32, "Guangzhou"),
+        new Person("LiuYang", 21, "Shenzhen"),
+        new Person("ChenJie", 36, "Hangzhou"),
+        new Person("YangLei", 38, "Nanjing"),
+        new Person("ZhaoMin", 25, "Wuhan"),
+        new Person("SunTao", 34, "Chengdu"),
+        new Person("ZhouKai", 28, "Xi'an"),
+        new Person("WuDi", 41, "Tianjin")
+        ));
+
+        List<Integer> integerList = Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+            .prepend(11)
+            .toList();
+        assertEquals(integerList, List.of(
+            11, 1, 2 ,3, 4, 5, 6, 7, 8, 9, 10
+        ));
+
+        List<Long> longList = Linq.ofLongs(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L)
+            .prepend(11)
+            .toList();
+        assertEquals(longList, List.of(
+            11L, 1L, 2L ,3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L
+        ));
+
+        List<Double> doubleList = Linq.ofDoubles(1.1, 2.2, 3.3, 4.4, 5.5)
+            .prepend(6.6)
+            .toList();
+        assertEquals(doubleList, List.of(
+            6.6, 1.1, 2.2, 3.3, 4.4, 5.5
+        ));
     }
 
     @Test
     void select() {
+        Linq.fromIterable(PERSONS)
+            .select(Person::email)
+            .forEach(System.out::println);
+
+        List<Integer> integerList = Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+            .select(n -> n * n)
+            .toList();
+        assertEquals(integerList, List.of(
+            1, 4, 9, 16, 25, 36, 49, 64, 81, 100
+        ));
+
+        List<Long> longList = Linq.ofLongs(1L, 2L, 3L)
+            .select(n -> n * n)
+            .toList();
+        assertEquals(longList, List.of(
+            1L, 4L, 9L
+        ));
+
     }
 
     @Test
@@ -276,6 +396,9 @@ class LinqTest {
 
     @Test
     void groupBy() {
+        Linq.fromIterable(PERSONS)
+            .groupBy(p -> p.name.charAt(0))
+            .forEach(System.out::println);
     }
 
     @Test
@@ -305,6 +428,7 @@ class LinqTest {
             .forEach(System.out::println);
     }
 
+
     @Test
     void testGroupResultBy() {
     }
@@ -319,6 +443,40 @@ class LinqTest {
 
     @Test
     void orderBy() {
+        // long t3 = System.nanoTime();
+        // List<Person> list1 = io.github.piscescup.linq.Linq.fromIterable(PERSONS)
+        //     .orderBy(Person::age)
+        //     .thenBy(Person::name)
+        //     .thenDescendingBy(Person::address)
+        //     .toList();
+        // long t4 = System.nanoTime();
+        //
+        //
+        // long t1 = System.nanoTime();
+        // List<Person> list = Linq.fromIterable(PERSONS)
+        //     .orderBy(Person::age)
+        //     .thenOrderBy(Person::name)
+        //     .thenOrderByDescending(Person::address)
+        //     .toList();
+        // long t2 = System.nanoTime();
+        //
+        //
+        // System.out.println("Linq2 :" + (t2 - t1) / 1000  + " us" );
+        // System.out.println("Linq  :" + (t4 - t3) / 1000 + " us" );
+
+        long t5 = System.nanoTime();
+        io.github.piscescup.linq.Linq.of(1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .select(x -> x * x)
+            .toList();
+        long t6 = System.nanoTime();
+        long t7 = System.nanoTime();
+        Linq.ofInts(1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .select(x -> x * x)
+            .toList();
+        long t8 = System.nanoTime();
+
+        System.out.println(t6 - t5);
+        System.out.println(t8 - t7);
     }
 
     @Test

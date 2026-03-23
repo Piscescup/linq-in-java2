@@ -1,4 +1,4 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import io.github.piscescup.util.validation.NullCheck;
 import org.jetbrains.annotations.NotNull;

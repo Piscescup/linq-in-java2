@@ -1,15 +1,15 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.Equalator;
 import io.github.piscescup.interfaces.exfunction.BinFunction;
-import io.github.piscescup.primitive.DoubleLinq;
-import io.github.piscescup.primitive.DoubleEnumerable;
-import io.github.piscescup.primitive.IntLinq;
-import io.github.piscescup.primitive.IntEnumerable;
-import io.github.piscescup.primitive.LongLinq;
-import io.github.piscescup.primitive.LongEnumerable;
+import io.github.piscescup.linq4j2.primitive.DoubleLinq;
+import io.github.piscescup.linq4j2.primitive.DoubleEnumerable;
+import io.github.piscescup.linq4j2.primitive.IntLinq;
+import io.github.piscescup.linq4j2.primitive.IntEnumerable;
+import io.github.piscescup.linq4j2.primitive.LongLinq;
+import io.github.piscescup.linq4j2.primitive.LongEnumerable;
 import io.github.piscescup.util.validation.NullCheck;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -24,25 +24,42 @@ import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
 
 /**
- * Default {@link Enumerable} implementation backed by repeated materialization.
+ * Default {@link Enumerable} implementation backed by an enumerator factory.
  *
  * @param <T> the element type
  */
 public class Linq<T> implements Enumerable<T> {
-    private final Supplier<List<T>> materializer;
+    private final Supplier<? extends Enumerator<T>> factory;
+    private final Supplier<List<T>> listFactory;
 
     public Linq(InternalEnumerable<? extends T> source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> materialize(source);
+        this.factory = () -> uncheckedCast(source.enumerator());
+        this.listFactory = () -> materialize(factory);
     }
 
     public Linq(Iterable<? extends T> source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> materialize(source);
+        if (source instanceof List<? extends T> list) {
+            this.factory = () -> new ListEnumerator<>(uncheckedListCopy(list));
+            this.listFactory = () -> uncheckedListCopy(list);
+            return;
+        }
+        this.factory = () -> enumeratorOf(source.iterator());
+        if (source instanceof Collection<? extends T> collection) {
+            this.listFactory = () -> new ArrayList<>(collection);
+        } else {
+            this.listFactory = () -> materialize(factory);
+        }
     }
 
-    private Linq(Supplier<List<T>> materializer) {
-        this.materializer = materializer;
+    private Linq(Supplier<? extends Enumerator<T>> factory) {
+        this(factory, () -> materialize(factory));
+    }
+
+    private Linq(Supplier<? extends Enumerator<T>> factory, Supplier<List<T>> listFactory) {
+        this.factory = factory;
+        this.listFactory = listFactory;
     }
 
     @NotNull
@@ -62,10 +79,21 @@ public class Linq<T> implements Enumerable<T> {
     @SafeVarargs
     public static <T> Enumerable<T> of(T... elements) {
         NullCheck.requireNonNull(elements);
-        return new Linq<>(() -> {
-            List<T> result = new ArrayList<>(elements.length);
-            Collections.addAll(result, elements);
-            return result;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private int index;
+
+            @Override
+            protected boolean computeNext() {
+                if (index >= elements.length) {
+                    return end();
+                }
+                return yieldValue(elements[index++]);
+            }
+
+            @Override
+            public void reset() {
+                index = 0;
+            }
         });
     }
 
@@ -108,140 +136,288 @@ public class Linq<T> implements Enumerable<T> {
     @NotNull
     @Contract(value = "_ -> new", pure = true)
     private static <T> Enumerable<T> fromList(List<? extends T> source) {
-        return new Linq<>(() -> new ArrayList<>(source));
+        List<T> copy = new ArrayList<>(source);
+        return new Linq<>(() -> new ListEnumerator<>(copy), () -> new ArrayList<>(copy));
     }
 
     @Override
     public Enumerator<T> enumerator() {
-        return new ListEnumerator<>(snapshot());
+        return factory.get();
     }
 
     @Override
     public Linq<T> skip(long count) {
-        return new Linq<>(() -> {
-            List<T> source = snapshot();
-            if (count <= 0) {
-                return source;
+        if (count <= 0) {
+            return new Linq<>(factory);
+        }
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private long remaining = count;
+            private boolean skipped;
+
+            @Override
+            protected boolean computeNext() {
+                skipIfNeeded();
+                if (!source.moveNext()) {
+                    return end();
+                }
+                return yieldValue(source.current());
             }
-            if (count >= source.size()) {
-                return new ArrayList<>();
+
+            private void skipIfNeeded() {
+                if (skipped) {
+                    return;
+                }
+                while (remaining > 0 && source.moveNext()) {
+                    remaining--;
+                }
+                skipped = true;
             }
-            return new ArrayList<>(source.subList((int) count, source.size()));
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public Linq<T> take(long count) {
-        return new Linq<>(() -> {
-            List<T> source = snapshot();
-            if (count <= 0) {
-                return new ArrayList<>();
+        if (count <= 0) {
+            return new Linq<>(() -> Linq.<T>emptyEnumerator());
+        }
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private long remaining = count;
+
+            @Override
+            protected boolean computeNext() {
+                if (remaining <= 0 || !source.moveNext()) {
+                    return end();
+                }
+                remaining--;
+                return yieldValue(source.current());
             }
-            if (count >= source.size()) {
-                return source;
+
+            @Override
+            public void close() {
+                source.close();
             }
-            return new ArrayList<>(source.subList(0, (int) count));
         });
     }
 
     @Override
     public Linq<T> where(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        return new Linq<>(() -> {
-            List<T> result = new ArrayList<>();
-            List<T> snapshot = snapshot();
-            for (T element : snapshot) {
-                if (predicate.test(element)) {
-                    result.add(element);
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    T element = source.current();
+                    if (predicate.test(element)) {
+                        return yieldValue(element);
+                    }
                 }
+                return end();
             }
-            return result;
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public Linq<T> takeWhile(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        return new Linq<>(() -> {
-            List<T> result = new ArrayList<>();
-            for (T element : snapshot()) {
-                if (!predicate.test(element)) {
-                    break;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private boolean stopped;
+
+            @Override
+            protected boolean computeNext() {
+                if (stopped || !source.moveNext()) {
+                    return end();
                 }
-                result.add(element);
+                T element = source.current();
+                if (!predicate.test(element)) {
+                    stopped = true;
+                    return end();
+                }
+                return yieldValue(element);
             }
-            return result;
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public Linq<T> skipWhile(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        return new Linq<>(() -> {
-            List<T> source = snapshot();
-            List<T> result = new ArrayList<>();
-            boolean skipping = true;
-            for (T element : source) {
-                if (skipping && predicate.test(element)) {
-                    continue;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private boolean skipping = true;
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    T element = source.current();
+                    if (skipping && predicate.test(element)) {
+                        continue;
+                    }
+                    skipping = false;
+                    return yieldValue(element);
                 }
-                skipping = false;
-                result.add(element);
+                return end();
             }
-            return result;
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public Linq<T> concat(Enumerable<? extends T> other) {
         NullCheck.requireNonNull(other);
-        return new Linq<>(() -> {
-            List<T> result = snapshot();
-            result.addAll(materialize(other));
-            return result;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> first = Linq.this.enumerator();
+            private final Enumerator<? extends T> second = other.enumerator();
+            private boolean usingFirst = true;
+
+            @Override
+            protected boolean computeNext() {
+                if (usingFirst) {
+                    if (first.moveNext()) {
+                        return yieldValue(first.current());
+                    }
+                    usingFirst = false;
+                }
+                if (!second.moveNext()) {
+                    return end();
+                }
+                return yieldValue(second.current());
+            }
+
+            @Override
+            public void close() {
+                first.close();
+                second.close();
+            }
         });
     }
 
     @Override
     public Linq<T> append(T element) {
-        return new Linq<>(() -> {
-            List<T> result = snapshot();
-            result.add(element);
-            return result;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private boolean appended;
+
+            @Override
+            protected boolean computeNext() {
+                if (source.moveNext()) {
+                    return yieldValue(source.current());
+                }
+                if (appended) {
+                    return end();
+                }
+                appended = true;
+                return yieldValue(element);
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public Linq<T> prepend(T element) {
-        return new Linq<>(() -> {
-            List<T> result = new ArrayList<>();
-            result.add(element);
-            result.addAll(snapshot());
-            return result;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private boolean emittedPrepended;
+
+            @Override
+            protected boolean computeNext() {
+                if (!emittedPrepended) {
+                    emittedPrepended = true;
+                    return yieldValue(element);
+                }
+                if (!source.moveNext()) {
+                    return end();
+                }
+                return yieldValue(source.current());
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public <R> Linq<R> select(Function<? super T, ? extends R> selector) {
         NullCheck.requireNonNull(selector);
-        return new Linq<>(() -> {
-            List<R> result = new ArrayList<>();
-            for (T element : snapshot()) {
-                result.add(selector.apply(element));
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+
+            @Override
+            protected boolean computeNext() {
+                if (!source.moveNext()) {
+                    return end();
+                }
+                return yieldValue(selector.apply(source.current()));
             }
-            return result;
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public <R> Linq<R> selectMany(Function<? super T, ? extends Enumerable<? extends R>> selector) {
         NullCheck.requireNonNull(selector);
-        return new Linq<>(() -> {
-            List<R> result = new ArrayList<>();
-            for (T element : snapshot()) {
-                result.addAll(materialize(selector.apply(element)));
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> outer = Linq.this.enumerator();
+            private Enumerator<? extends R> inner;
+
+            @Override
+            protected boolean computeNext() {
+                while (true) {
+                    if (inner != null && inner.moveNext()) {
+                        return yieldValue(inner.current());
+                    }
+                    closeInner();
+                    if (!outer.moveNext()) {
+                        return end();
+                    }
+                    inner = selector.apply(outer.current()).enumerator();
+                }
             }
-            return result;
+
+            @Override
+            public void close() {
+                closeInner();
+                outer.close();
+            }
+
+            private void closeInner() {
+                if (inner != null) {
+                    inner.close();
+                    inner = null;
+                }
+            }
         });
     }
 
@@ -316,9 +492,9 @@ public class Linq<T> implements Enumerable<T> {
         NullCheck.requireNonNull(resultSelector);
         NullCheck.requireNonNull(equalator);
 
-        List<Grouping<K, E>> groups = buildGroups(snapshot(), keySelector, elementSelector, equalator);
+        List<ReadOnlyGroup<K, E>> groups = buildGroups(snapshot(), keySelector, elementSelector, equalator);
         List<R> result = new ArrayList<>(groups.size());
-        for (Grouping<K, E> group : groups) {
+        for (ReadOnlyGroup<K, E> group : groups) {
             result.add(resultSelector.apply(group.groupingKey(), fromList(group.elements())));
         }
         return fromList(result);
@@ -456,7 +632,7 @@ public class Linq<T> implements Enumerable<T> {
             List<T> result = new ArrayList<>();
             addDistinct(result, snapshot(), equalator);
             addDistinct(result, materialize(other), equalator);
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -482,7 +658,7 @@ public class Linq<T> implements Enumerable<T> {
             List<K> seenKeys = new ArrayList<>();
             addDistinctBy(result, seenKeys, snapshot(), keySelector, equalator);
             addDistinctBy(result, seenKeys, materialize(other), keySelector, equalator);
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -507,7 +683,7 @@ public class Linq<T> implements Enumerable<T> {
                     result.add(element);
                 }
             }
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -539,7 +715,7 @@ public class Linq<T> implements Enumerable<T> {
                     emittedKeys.add(key);
                 }
             }
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -577,7 +753,7 @@ public class Linq<T> implements Enumerable<T> {
                     }
                 }
             }
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -620,7 +796,7 @@ public class Linq<T> implements Enumerable<T> {
                     result.add(resultSelector.apply(outerItem, null));
                 }
             }
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -663,7 +839,7 @@ public class Linq<T> implements Enumerable<T> {
                     result.add(resultSelector.apply(null, innerItem));
                 }
             }
-            return result;
+            return new ListEnumerator<>(result);
         });
     }
 
@@ -674,15 +850,23 @@ public class Linq<T> implements Enumerable<T> {
     ) {
         NullCheck.requireNonNull(second);
         NullCheck.requireNonNull(resultSelector);
-        return new Linq<>(() -> {
-            List<T> left = snapshot();
-            List<TSecond> right = materialize(second);
-            int size = Math.min(left.size(), right.size());
-            List<R> result = new ArrayList<>(size);
-            for (int i = 0; i < size; i++) {
-                result.add(resultSelector.apply(left.get(i), right.get(i)));
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> first = Linq.this.enumerator();
+            private final Enumerator<? extends TSecond> otherEnumerator = second.enumerator();
+
+            @Override
+            protected boolean computeNext() {
+                if (!first.moveNext() || !otherEnumerator.moveNext()) {
+                    return end();
+                }
+                return yieldValue(resultSelector.apply(first.current(), otherEnumerator.current()));
             }
-            return result;
+
+            @Override
+            public void close() {
+                first.close();
+                otherEnumerator.close();
+            }
         });
     }
 
@@ -698,16 +882,25 @@ public class Linq<T> implements Enumerable<T> {
     ) {
         NullCheck.requireNonNull(second);
         NullCheck.requireNonNull(third);
-        return new Linq<>(() -> {
-            List<T> firstItems = snapshot();
-            List<TSecond> secondItems = materialize(second);
-            List<TThird> thirdItems = materialize(third);
-            int size = Math.min(firstItems.size(), Math.min(secondItems.size(), thirdItems.size()));
-            List<TriEntry<T, TSecond, TThird>> result = new ArrayList<>(size);
-            for (int i = 0; i < size; i++) {
-                result.add(new TriEntry<>(firstItems.get(i), secondItems.get(i), thirdItems.get(i)));
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> first = Linq.this.enumerator();
+            private final Enumerator<? extends TSecond> secondEnumerator = second.enumerator();
+            private final Enumerator<? extends TThird> thirdEnumerator = third.enumerator();
+
+            @Override
+            protected boolean computeNext() {
+                if (!first.moveNext() || !secondEnumerator.moveNext() || !thirdEnumerator.moveNext()) {
+                    return end();
+                }
+                return yieldValue(new TriEntry<>(first.current(), secondEnumerator.current(), thirdEnumerator.current()));
             }
-            return result;
+
+            @Override
+            public void close() {
+                first.close();
+                secondEnumerator.close();
+                thirdEnumerator.close();
+            }
         });
     }
 
@@ -744,25 +937,33 @@ public class Linq<T> implements Enumerable<T> {
     @Override
     public T[] toArray(java.util.function.IntFunction<T[]> generator) {
         NullCheck.requireNonNull(generator);
-        return snapshot().toArray(generator.apply((int) count()));
+        List<T> source = snapshot();
+        return source.toArray(generator.apply(source.size()));
     }
 
     @Override
     public <R> Enumerable<R> castTo(Class<R> clazz) {
         NullCheck.requireNonNull(clazz);
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
 
-        List<R> result = new ArrayList<>();
-
-        List<T> ts = this.materializer.get();
-        for (T t : ts) {
-            if  (!clazz.isInstance(t)) {
-                throw new ClassCastException("Cannot cast element " + t + " to " + clazz.getName());
+            @Override
+            protected boolean computeNext() {
+                if (!source.moveNext()) {
+                    return end();
+                }
+                T element = source.current();
+                if (!clazz.isInstance(element)) {
+                    throw new ClassCastException("Cannot cast element " + element + " to " + clazz.getName());
+                }
+                return yieldValue(clazz.cast(element));
             }
 
-            result.add(clazz.cast(t));
-        }
-
-        return new Linq<>(() -> result);
+            @Override
+            public void close() {
+                source.close();
+            }
+        });
     }
 
     @Override
@@ -775,36 +976,34 @@ public class Linq<T> implements Enumerable<T> {
     @Override
     public boolean any(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        for (T element : snapshot()) {
-            if (predicate.test(element)) {
-                return true;
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
     }
 
     @Override
     public boolean all(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        for (T element : snapshot()) {
-            if (!predicate.test(element)) {
-                return false;
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (!predicate.test(enumerator.current())) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
     }
 
     @Override
     public long count() {
-        return snapshot().size();
-    }
-
-    @Override
-    public long countBy(Predicate<? super T> predicate) {
-        NullCheck.requireNonNull(predicate);
         long count = 0;
-        for (T element : snapshot()) {
-            if (predicate.test(element)) {
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
                 count++;
             }
         }
@@ -812,17 +1011,53 @@ public class Linq<T> implements Enumerable<T> {
     }
 
     @Override
+    public long countBy(Predicate<? super T> predicate) {
+        NullCheck.requireNonNull(predicate);
+        long count = 0;
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    @Override
     public Linq<T> distinct() {
-        return new Linq<>(() -> {
-            List<T> result = new ArrayList<>();
-            addDistinct(result, snapshot(), Linq::defaultEquals);
-            return result;
+        return new Linq<>(() -> new AbstractEnumerator<>() {
+            private final Enumerator<T> source = Linq.this.enumerator();
+            private final Set<T> seen = new HashSet<>();
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    T element = source.current();
+                    if (seen.add(element)) {
+                        return yieldValue(element);
+                    }
+                }
+                return end();
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
         });
     }
 
     @Override
     public boolean contains(T value) {
-        return snapshot().contains(value);
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (Objects.equals(enumerator.current(), value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     @Override
@@ -848,12 +1083,15 @@ public class Linq<T> implements Enumerable<T> {
     @Override
     public Optional<T> firstOptional(Predicate<? super T> predicate) {
         NullCheck.requireNonNull(predicate);
-        for (T element : snapshot()) {
-            if (predicate.test(element)) {
-                return Optional.ofNullable(element);
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                T element = enumerator.current();
+                if (predicate.test(element)) {
+                    return Optional.ofNullable(element);
+                }
             }
+            return Optional.empty();
         }
-        return Optional.empty();
     }
 
     @Override
@@ -868,14 +1106,16 @@ public class Linq<T> implements Enumerable<T> {
 
     @Override
     public Optional<T> singleOptional() {
-        List<T> source = snapshot();
-        if (source.isEmpty()) {
-            return Optional.empty();
+        try (Enumerator<T> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return Optional.empty();
+            }
+            T value = enumerator.current();
+            if (enumerator.moveNext()) {
+                throw new IllegalStateException("Sequence contains more than one element.");
+            }
+            return Optional.ofNullable(value);
         }
-        if (source.size() > 1) {
-            throw new IllegalStateException("Sequence contains more than one element.");
-        }
-        return Optional.ofNullable(source.getFirst());
     }
 
     @Override
@@ -883,15 +1123,18 @@ public class Linq<T> implements Enumerable<T> {
         NullCheck.requireNonNull(predicate);
         T value = null;
         boolean found = false;
-        for (T element : snapshot()) {
-            if (!predicate.test(element)) {
-                continue;
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                T element = enumerator.current();
+                if (!predicate.test(element)) {
+                    continue;
+                }
+                if (found) {
+                    throw new IllegalStateException("Sequence contains more than one matching element.");
+                }
+                value = element;
+                found = true;
             }
-            if (found) {
-                throw new IllegalStateException("Sequence contains more than one matching element.");
-            }
-            value = element;
-            found = true;
         }
         return found ? Optional.ofNullable(value) : Optional.empty();
     }
@@ -900,8 +1143,10 @@ public class Linq<T> implements Enumerable<T> {
     public <A> A aggregate(A seed, BinFunction<? super A, ? super T, ? extends A> aggregator) {
         NullCheck.requireNonNull(aggregator);
         A result = seed;
-        for (T element : snapshot()) {
-            result = aggregator.apply(result, element);
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                result = aggregator.apply(result, enumerator.current());
+            }
         }
         return result;
     }
@@ -913,18 +1158,19 @@ public class Linq<T> implements Enumerable<T> {
 
     @Override
     public Optional<T> minOptional() {
-        List<T> source = snapshot();
-        if (source.isEmpty()) {
-            return Optional.empty();
-        }
-        T best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            T candidate = source.get(i);
-            if (compareNatural(candidate, best) < 0) {
-                best = candidate;
+        try (Enumerator<T> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return Optional.empty();
             }
+            T best = enumerator.current();
+            while (enumerator.moveNext()) {
+                T candidate = enumerator.current();
+                if (compareNatural(candidate, best) < 0) {
+                    best = candidate;
+                }
+            }
+            return Optional.ofNullable(best);
         }
-        return Optional.ofNullable(best);
     }
 
     @Override
@@ -934,22 +1180,23 @@ public class Linq<T> implements Enumerable<T> {
 
     @Override
     public Optional<T> maxOptional() {
-        List<T> source = snapshot();
-        if (source.isEmpty()) {
-            return Optional.empty();
-        }
-        T best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            T candidate = source.get(i);
-            if (compareNatural(candidate, best) > 0) {
-                best = candidate;
+        try (Enumerator<T> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return Optional.empty();
             }
+            T best = enumerator.current();
+            while (enumerator.moveNext()) {
+                T candidate = enumerator.current();
+                if (compareNatural(candidate, best) > 0) {
+                    best = candidate;
+                }
+            }
+            return Optional.ofNullable(best);
         }
-        return Optional.ofNullable(best);
     }
 
     private List<T> snapshot() {
-        return new ArrayList<>(materializer.get());
+        return listFactory.get();
     }
 
     private static <T> List<T> materialize(Iterable<? extends T> source) {
@@ -958,6 +1205,47 @@ public class Linq<T> implements Enumerable<T> {
             result.add(element);
         }
         return result;
+    }
+
+    private static <T> List<T> materialize(Supplier<? extends Enumerator<T>> factory) {
+        List<T> result = new ArrayList<>();
+        try (Enumerator<T> enumerator = factory.get()) {
+            while (enumerator.moveNext()) {
+                result.add(enumerator.current());
+            }
+        }
+        return result;
+    }
+
+    private static <T> Enumerator<T> enumeratorOf(Iterator<? extends T> iterator) {
+        return new AbstractEnumerator<>() {
+            @Override
+            protected boolean computeNext() {
+                if (!iterator.hasNext()) {
+                    return end();
+                }
+                return yieldValue(iterator.next());
+            }
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Enumerator<T> uncheckedCast(Enumerator<? extends T> source) {
+        return (Enumerator<T>) source;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> List<T> uncheckedListCopy(List<? extends T> source) {
+        return new ArrayList<>((List<T>) source);
+    }
+
+    private static <T> Enumerator<T> emptyEnumerator() {
+        return new AbstractEnumerator<>() {
+            @Override
+            protected boolean computeNext() {
+                return end();
+            }
+        };
     }
 
     private static <T> boolean defaultEquals(T left, T right) {
@@ -1019,18 +1307,18 @@ public class Linq<T> implements Enumerable<T> {
         return false;
     }
 
-    private static <T, K, E> List<Grouping<K, E>> buildGroups(
+    private static <T, K, E> List<ReadOnlyGroup<K, E>> buildGroups(
         List<T> source,
         Function<? super T, ? extends K> keySelector,
         Function<? super T, ? extends E> elementSelector,
         Equalator<? super K> equalator
     ) {
-        List<Grouping<K, E>> groups = new ArrayList<>();
+        List<ReadOnlyGroup<K, E>> groups = new ArrayList<>();
         for (T element : source) {
             K key = keySelector.apply(element);
-            Grouping<K, E> group = findGroup(groups, key, equalator);
+            ReadOnlyGroup<K, E> group = findGroup(groups, key, equalator);
             if (group == null) {
-                group = new Grouping<>(key, new ArrayList<>());
+                group = new ReadOnlyGroup<>(key, new ArrayList<>());
                 groups.add(group);
             }
             group.elements().add(elementSelector.apply(element));
@@ -1038,12 +1326,12 @@ public class Linq<T> implements Enumerable<T> {
         return groups;
     }
 
-    private static <K, E> Grouping<K, E> findGroup(
-        List<Grouping<K, E>> groups,
+    private static <K, E> ReadOnlyGroup<K, E> findGroup(
+        List<ReadOnlyGroup<K, E>> groups,
         K key,
         Equalator<? super K> equalator
     ) {
-        for (Grouping<K, E> group : groups) {
+        for (ReadOnlyGroup<K, E> group : groups) {
             if (equalator.equals(group.groupingKey(), key)) {
                 return group;
             }
@@ -1068,111 +1356,63 @@ public class Linq<T> implements Enumerable<T> {
         }
     }
 
-    private static final class ListEnumerator<T> implements Enumerator<T> {
+    private static final class ListEnumerator<T> extends AbstractEnumerator<T> {
         private final List<T> elements;
-        private int index = -1;
-        private boolean prepared;
+        private int index;
 
         private ListEnumerator(List<T> elements) {
             this.elements = elements;
         }
 
         @Override
-        public boolean moveNext() {
-            if (index + 1 >= elements.size()) {
-                index = elements.size();
-                prepared = false;
-                return false;
+        protected boolean computeNext() {
+            if (index >= elements.size()) {
+                return end();
             }
-            index++;
-            prepared = true;
-            return true;
-        }
-
-        @Override
-        public T current() {
-            if (!prepared || index < 0 || index >= elements.size()) {
-                throw new IllegalStateException("Enumerator is not positioned on an element.");
-            }
-            return elements.get(index);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return index + 1 < elements.size();
-        }
-
-        @Override
-        public T next() {
-            if (!moveNext()) {
-                throw new NoSuchElementException();
-            }
-            return current();
-        }
-
-        @Override
-        public void forEachRemaining(java.util.function.Consumer<? super T> action) {
-            NullCheck.requireNonNull(action);
-            while (moveNext()) {
-                action.accept(current());
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+            return yieldValue(elements.get(index++));
         }
 
         @Override
         public void reset() {
-            index = -1;
-            prepared = false;
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
-    private static final class Grouping<K, E> implements Groupable<K, E> {
-        private final K key;
-        private List<E> elements;
-
-        private Grouping(K key, List<E> elements) {
-            this.key = key;
-            this.elements = elements;
-        }
-
-        @Override
-        public K groupingKey() {
-            return key;
-        }
-
-        @Override
-        public List<E> elements() {
-            return elements;
-        }
-
-        @Override
-        public List<E> setValue(List<E> value) {
-            List<E> previous = elements;
-            elements = value;
-            return previous;
+            index = 0;
         }
     }
 
     private static final class OrderedLinq<T> extends Linq<T> implements OrderedEnumerable<T> {
-        private final Supplier<List<T>> sourceSupplier;
+        private final Supplier<List<T>> sourceListFactory;
         private final Comparator<T> comparator;
 
-        private OrderedLinq(Supplier<List<T>> sourceSupplier, Comparator<T> comparator) {
+        private OrderedLinq(Supplier<List<T>> sourceListFactory, Comparator<T> comparator) {
             super(() -> {
-                List<T> items = new ArrayList<>(sourceSupplier.get());
+                List<T> items = sourceListFactory.get();
+                items.sort(comparator);
+                return new ListEnumerator<>(items);
+            }, () -> {
+                List<T> items = sourceListFactory.get();
                 items.sort(comparator);
                 return items;
             });
-            this.sourceSupplier = sourceSupplier;
+            this.sourceListFactory = sourceListFactory;
             this.comparator = comparator;
+        }
+
+        @Override
+        public List<T> toList() {
+            List<T> items = sourceListFactory.get();
+            items.sort(comparator);
+            return items;
+        }
+
+        @Override
+        public Object[] toArray() {
+            return toList().toArray();
+        }
+
+        @Override
+        public T[] toArray(java.util.function.IntFunction<T[]> generator) {
+            NullCheck.requireNonNull(generator);
+            List<T> items = toList();
+            return items.toArray(generator.apply(items.size()));
         }
 
         @Override
@@ -1190,49 +1430,25 @@ public class Linq<T> implements Enumerable<T> {
         ) {
             NullCheck.requireNonNull(keySelector);
             NullCheck.requireNonNull(nextComparator);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return nextComparator.compare(keySelector.apply(left), keySelector.apply(right));
-            });
+            return new OrderedLinq<>(sourceListFactory, comparator.thenComparing(keySelector, nextComparator));
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderByInt(ToIntFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Integer.compare(keySelector.applyAsInt(left), keySelector.applyAsInt(right));
-            });
+            return new OrderedLinq<>(sourceListFactory, comparator.thenComparingInt(keySelector));
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderByLong(ToLongFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Long.compare(keySelector.applyAsLong(left), keySelector.applyAsLong(right));
-            });
+            return new OrderedLinq<>(sourceListFactory, comparator.thenComparingLong(keySelector));
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderByDouble(ToDoubleFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Double.compare(keySelector.applyAsDouble(left), keySelector.applyAsDouble(right));
-            });
+            return new OrderedLinq<>(sourceListFactory, comparator.thenComparingDouble(keySelector));
         }
 
         @Override
@@ -1250,49 +1466,34 @@ public class Linq<T> implements Enumerable<T> {
         ) {
             NullCheck.requireNonNull(keySelector);
             NullCheck.requireNonNull(nextComparator);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return nextComparator.compare(keySelector.apply(right), keySelector.apply(left));
-            });
+            return new OrderedLinq<>(sourceListFactory, comparator.thenComparing(keySelector, nextComparator.reversed()));
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderDescendingByInt(ToIntFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Integer.compare(keySelector.applyAsInt(right), keySelector.applyAsInt(left));
-            });
+            return new OrderedLinq<>(
+                sourceListFactory,
+                comparator.thenComparing(Comparator.comparingInt(keySelector).reversed())
+            );
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderDescendingByLong(ToLongFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Long.compare(keySelector.applyAsLong(right), keySelector.applyAsLong(left));
-            });
+            return new OrderedLinq<>(
+                sourceListFactory,
+                comparator.thenComparing(Comparator.comparingLong(keySelector).reversed())
+            );
         }
 
         @Override
         public OrderedEnumerable<T> thenOrderDescendingByDouble(ToDoubleFunction<? super T> keySelector) {
             NullCheck.requireNonNull(keySelector);
-            return new OrderedLinq<>(sourceSupplier, (left, right) -> {
-                int current = comparator.compare(left, right);
-                if (current != 0) {
-                    return current;
-                }
-                return Double.compare(keySelector.applyAsDouble(right), keySelector.applyAsDouble(left));
-            });
+            return new OrderedLinq<>(
+                sourceListFactory,
+                comparator.thenComparing(Comparator.comparingDouble(keySelector).reversed())
+            );
         }
     }
 }
