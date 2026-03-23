@@ -284,6 +284,7 @@ class LinqTest {
 
     @Test
     void testGroupBy1() {
+
     }
 
     @Test
@@ -292,6 +293,16 @@ class LinqTest {
 
     @Test
     void groupResultBy() {
+        Linq.fromIterable(PERSONS)
+            .append(new Person("Tom", 29, "New York"))
+            .append(new Person("Jerry211", 31, "Los Angeles"))
+            .append(new Person("Jerry211", 32, "Chicago"))
+            .groupResultBy(
+                Person::address, // group by city
+                Person::name, // element selector: name
+                (city, names) -> city + ": " + names.toList() // result selector
+            )
+            .forEach(System.out::println);
     }
 
     @Test
@@ -467,10 +478,126 @@ class LinqTest {
 
     @Test
     void castTo() {
+        class Animal {
+            private String type;
+            private int age;
+
+
+            public Animal(String type, int age) {
+                this.type = type;
+                this.age = age;
+            }
+
+            public String getType() {
+                return type;
+            }
+
+            public void setType(String type) {
+                this.type = type;
+            }
+
+            public int getAge() {
+                return age;
+            }
+
+            public void setAge(int age) {
+                this.age = age;
+            }
+
+            public String toString() {
+                return "Animal{species = " + type + ", age = " + age + "}";
+            }
+        }
+
+        class Dog extends Animal {
+            private String name;
+            public Dog() {
+                super("哺乳动物", 0);
+            }
+
+            public Dog(String name) {
+                this(0, name);
+            }
+
+            public Dog(int age, String name) {
+                super("哺乳动物", age);
+                this.name = name;
+            }
+
+            public String getName() {
+                return name;
+            }
+
+            public void setName(String name) {
+                this.name = name;
+            }
+
+            public String toString() {
+                return "Dog{name = " + name + "}";
+            }
+        }
+
+        class Cat extends Animal {
+            private String name;
+            public Cat() {
+                super("哺乳动物", 0);
+            }
+
+            public Cat(int age, String name) {
+                super("哺乳动物", age);
+                this.name = name;
+            }
+
+            public Cat(String name) {
+                this(0, name);
+            }
+
+            public String getName() {
+                return name;
+            }
+
+            public void setName(String name) {
+                this.name = name;
+            }
+
+            public String toString() {
+                return "Cat{name = " + name + "}";
+            }
+        }
+
+        Animal dog1 = new Dog("Da Huang");
+        Animal dog2 = new Dog("Wang Cai");
+        Animal dog3 = new Dog("Wang Huang");
+
+        Animal cat1 = new Cat("Bu Ding");
+        Animal cat2 = new Cat("Nai Cha");
+        Animal cat3 = new Cat("Nai Ding");
+
+        Linq.of(dog1, dog2, dog3)
+            .castTo(Dog.class)
+            .select(Dog::getClass)
+            .forEach(System.out::println);
+        assertThrows(ClassCastException.class, () -> Linq.of(dog1, dog2, dog3)
+            .castTo(Cat.class)
+            .forEach(System.out::println));
+
+        Linq.of(cat1, cat2, cat3)
+            .castTo(Cat.class)
+            .select(Cat::getClass)
+            .forEach(System.out::println);
+        assertThrows(ClassCastException.class, () -> Linq.of(cat1, cat2, cat3)
+            .castTo(Dog.class)
+            .forEach(System.out::println));
     }
 
     @Test
     void any() {
+        boolean any = Linq.fromIterable(PERSONS)
+            .any();
+        assertTrue(any);
+
+        assertFalse(Linq.fromIterable(PERSONS)
+            .any(p -> p.age() > 100));
     }
 
     @Test
