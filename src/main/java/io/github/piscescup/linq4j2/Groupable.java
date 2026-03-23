@@ -1,4 +1,4 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import java.util.List;
 import java.util.Map;

@@ -1,9 +1,10 @@
-package io.github.piscescup.primitive;
+package io.github.piscescup.linq4j2.primitive;
 
-import io.github.piscescup.Enumerable;
-import io.github.piscescup.Enumerator;
-import io.github.piscescup.Groupable;
-import io.github.piscescup.Linq;
+import io.github.piscescup.linq4j2.AbstractEnumerator;
+import io.github.piscescup.linq4j2.Enumerable;
+import io.github.piscescup.linq4j2.Enumerator;
+import io.github.piscescup.linq4j2.Groupable;
+import io.github.piscescup.linq4j2.Linq;
 import io.github.piscescup.entries.BinEntry;
 import io.github.piscescup.entries.TriEntry;
 import io.github.piscescup.interfaces.Equalator;
@@ -29,16 +30,43 @@ import java.util.function.IntUnaryOperator;
 import java.util.function.Supplier;
 
 public final class IntLinq implements IntEnumerable {
-    private final Supplier<List<Integer>> materializer;
+    private final Supplier<? extends Enumerator<Integer>> factory;
+    private final Supplier<List<Integer>> listFactory;
 
     public IntLinq(Iterable<Integer> source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> materialize(source);
+        if (source instanceof List<Integer> list) {
+            this.factory = () -> new ListEnumerator(uncheckedListCopy(list));
+            this.listFactory = () -> uncheckedListCopy(list);
+            return;
+        }
+        this.factory = () -> enumeratorOf(source.iterator());
+        if (source instanceof Collection<Integer> collection) {
+            this.listFactory = () -> new ArrayList<>(collection);
+        } else {
+            this.listFactory = () -> materialize(factory);
+        }
     }
 
     public IntLinq(int[] source) {
         NullCheck.requireNonNull(source);
-        this.materializer = () -> {
+        this.factory = () -> new AbstractEnumerator<>() {
+            private int index;
+
+            @Override
+            protected boolean computeNext() {
+                if (index >= source.length) {
+                    return end();
+                }
+                return yieldValue(source[index++]);
+            }
+
+            @Override
+            public void reset() {
+                index = 0;
+            }
+        };
+        this.listFactory = () -> {
             List<Integer> result = new ArrayList<>(source.length);
             for (int value : source) {
                 result.add(value);
@@ -48,12 +76,17 @@ public final class IntLinq implements IntEnumerable {
     }
 
     public IntLinq(Supplier<List<Integer>> materializer) {
-        this.materializer = materializer;
+        this(() -> new ListEnumerator(materializer.get()), materializer);
+    }
+
+    private IntLinq(Supplier<? extends Enumerator<Integer>> factory, Supplier<List<Integer>> listFactory) {
+        this.factory = factory;
+        this.listFactory = listFactory;
     }
 
     @Override
     public Enumerator<Integer> enumerator() {
-        return new ListEnumerator(snapshot());
+        return factory.get();
     }
 
     @Override
@@ -188,7 +221,13 @@ public final class IntLinq implements IntEnumerable {
     @Override
     public LongEnumerable mapToLong(IntToLongFunction selector) {
         NullCheck.requireNonNull(selector);
-        throw new UnsupportedOperationException("LongLinq has not been added yet.");
+        return new LongLinq(() -> {
+            List<Long> result = new ArrayList<>();
+            for (int value : snapshot()) {
+                result.add(selector.applyAsLong(value));
+            }
+            return result;
+        });
     }
 
     @Override
@@ -574,38 +613,71 @@ public final class IntLinq implements IntEnumerable {
 
     @Override
     public IntEnumerable distinct() {
-        return new IntLinq(() -> {
+        return new IntLinq(() -> new AbstractEnumerator<>() {
+            private final Enumerator<Integer> source = IntLinq.this.enumerator();
+            private final Set<Integer> seen = new LinkedHashSet<>();
+
+            @Override
+            protected boolean computeNext() {
+                while (source.moveNext()) {
+                    int value = source.current();
+                    if (seen.add(value)) {
+                        return yieldValue(value);
+                    }
+                }
+                return end();
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
+        }, () -> {
             List<Integer> result = new ArrayList<>();
-            addDistinct(result, snapshot(), IntLinq::defaultEquals);
+            Set<Integer> seen = new LinkedHashSet<>();
+            try (Enumerator<Integer> source = IntLinq.this.enumerator()) {
+                while (source.moveNext()) {
+                    int value = source.current();
+                    if (seen.add(value)) {
+                        result.add(value);
+                    }
+                }
+            }
             return result;
         });
     }
 
     @Override
     public boolean any() {
-        return !snapshot().isEmpty();
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            return enumerator.moveNext();
+        }
     }
 
     @Override
     public boolean anyByInt(IntPredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (int value : snapshot()) {
-            if (predicate.test(value)) {
-                return true;
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
     }
 
     @Override
     public boolean allByInt(IntPredicate predicate) {
         NullCheck.requireNonNull(predicate);
-        for (int value : snapshot()) {
-            if (!predicate.test(value)) {
-                return false;
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (!predicate.test(enumerator.current())) {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
     }
 
     @Override
@@ -622,9 +694,11 @@ public final class IntLinq implements IntEnumerable {
     public long countByInt(IntPredicate predicate) {
         NullCheck.requireNonNull(predicate);
         long count = 0;
-        for (int value : snapshot()) {
-            if (predicate.test(value)) {
-                count++;
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (predicate.test(enumerator.current())) {
+                    count++;
+                }
             }
         }
         return count;
@@ -632,15 +706,24 @@ public final class IntLinq implements IntEnumerable {
 
     @Override
     public boolean contains(int value) {
-        return snapshot().contains(value);
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                if (enumerator.current() == value) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     @Override
     public <A> A aggregate(A seed, BiFunction<? super A, ? super Integer, ? extends A> aggregator) {
         NullCheck.requireNonNull(aggregator);
         A result = seed;
-        for (int value : snapshot()) {
-            result = aggregator.apply(result, value);
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                result = aggregator.apply(result, enumerator.current());
+            }
         }
         return result;
     }
@@ -685,8 +768,10 @@ public final class IntLinq implements IntEnumerable {
     @Override
     public int sum() {
         int sum = 0;
-        for (int value : snapshot()) {
-            sum += value;
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+            }
         }
         return sum;
     }
@@ -698,8 +783,15 @@ public final class IntLinq implements IntEnumerable {
 
     @Override
     public OptionalDouble averageOptional() {
-        List<Integer> source = snapshot();
-        return source.isEmpty() ? OptionalDouble.empty() : OptionalDouble.of((double) sum() / source.size());
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            long count = 0;
+            long sum = 0;
+            while (enumerator.moveNext()) {
+                sum += enumerator.current();
+                count++;
+            }
+            return count == 0 ? OptionalDouble.empty() : OptionalDouble.of((double) sum / count);
+        }
     }
 
     @Override
@@ -709,15 +801,16 @@ public final class IntLinq implements IntEnumerable {
 
     @Override
     public OptionalInt minOptional() {
-        List<Integer> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalInt.empty();
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+            int best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.min(best, enumerator.current());
+            }
+            return OptionalInt.of(best);
         }
-        int best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.min(best, source.get(i));
-        }
-        return OptionalInt.of(best);
     }
 
     @Override
@@ -727,15 +820,16 @@ public final class IntLinq implements IntEnumerable {
 
     @Override
     public OptionalInt maxOptional() {
-        List<Integer> source = snapshot();
-        if (source.isEmpty()) {
-            return OptionalInt.empty();
+        try (Enumerator<Integer> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                return OptionalInt.empty();
+            }
+            int best = enumerator.current();
+            while (enumerator.moveNext()) {
+                best = Math.max(best, enumerator.current());
+            }
+            return OptionalInt.of(best);
         }
-        int best = source.getFirst();
-        for (int i = 1; i < source.size(); i++) {
-            best = Math.max(best, source.get(i));
-        }
-        return OptionalInt.of(best);
     }
 
     @Override
@@ -749,7 +843,7 @@ public final class IntLinq implements IntEnumerable {
     }
 
     private List<Integer> snapshot() {
-        return new ArrayList<>(materializer.get());
+        return listFactory.get();
     }
 
     private List<Integer> filter(IntPredicate predicate) {
@@ -797,6 +891,32 @@ public final class IntLinq implements IntEnumerable {
             result.add(element);
         }
         return result;
+    }
+
+    private static List<Integer> materialize(Supplier<? extends Enumerator<Integer>> factory) {
+        List<Integer> result = new ArrayList<>();
+        try (Enumerator<Integer> enumerator = factory.get()) {
+            while (enumerator.moveNext()) {
+                result.add(enumerator.current());
+            }
+        }
+        return result;
+    }
+
+    private static Enumerator<Integer> enumeratorOf(java.util.Iterator<Integer> iterator) {
+        return new AbstractEnumerator<>() {
+            @Override
+            protected boolean computeNext() {
+                if (!iterator.hasNext()) {
+                    return end();
+                }
+                return yieldValue(iterator.next());
+            }
+        };
+    }
+
+    private static List<Integer> uncheckedListCopy(List<Integer> source) {
+        return new ArrayList<>(source);
     }
 
     private static List<Integer> toList(IntEnumerable enumerable) {
@@ -889,69 +1009,25 @@ public final class IntLinq implements IntEnumerable {
         }
     }
 
-    private static final class ListEnumerator implements Enumerator<Integer> {
+    private static final class ListEnumerator extends AbstractEnumerator<Integer> {
         private final List<Integer> elements;
-        private int index = -1;
-        private boolean prepared;
+        private int index;
 
         private ListEnumerator(List<Integer> elements) {
             this.elements = elements;
         }
 
         @Override
-        public boolean moveNext() {
-            if (index + 1 >= elements.size()) {
-                index = elements.size();
-                prepared = false;
-                return false;
+        protected boolean computeNext() {
+            if (index >= elements.size()) {
+                return end();
             }
-            index++;
-            prepared = true;
-            return true;
-        }
-
-        @Override
-        public Integer current() {
-            if (!prepared || index < 0 || index >= elements.size()) {
-                throw new IllegalStateException("Enumerator is not positioned on an element.");
-            }
-            return elements.get(index);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return index + 1 < elements.size();
-        }
-
-        @Override
-        public Integer next() {
-            if (!moveNext()) {
-                throw new NoSuchElementException();
-            }
-            return current();
-        }
-
-        @Override
-        public void forEachRemaining(java.util.function.Consumer<? super Integer> action) {
-            NullCheck.requireNonNull(action);
-            while (moveNext()) {
-                action.accept(current());
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+            return yieldValue(elements.get(index++));
         }
 
         @Override
         public void reset() {
-            index = -1;
-            prepared = false;
-        }
-
-        @Override
-        public void close() {
+            index = 0;
         }
     }
 

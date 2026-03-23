@@ -1,4 +1,4 @@
-package io.github.piscescup;
+package io.github.piscescup.linq4j2;
 
 import java.util.HashMap;
 import java.util.List;
@@ -14,8 +14,13 @@ import java.util.Objects;
  * @since 1.0.0
  */
 public abstract class AbstractGroup<K, E> implements Groupable<K, E> {
-    private K groupingKey;
-    private List<E> elements;
+    private final K groupingKey;
+    private final List<E> elements;
+
+    protected AbstractGroup(K key, List<E> value) {
+        this.groupingKey = key;
+        this.elements = value;
+    }
 
     /**
      * Returns the key of this grouping.
@@ -164,5 +169,14 @@ public abstract class AbstractGroup<K, E> implements Groupable<K, E> {
         return Objects.hash(groupingKey, elements);
     }
 
+    /**
+     * The string template of the group.
+     */
+    public static final String FORMATTER = "Grouping Key { %s } - %s";
+
+    @Override
+    public String toString() {
+        return FORMATTER.formatted(groupingKey, elements);
+    }
 
 }
