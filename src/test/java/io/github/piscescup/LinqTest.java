@@ -864,9 +864,9 @@ class LinqTest {
         );
 
         List<Groupable<Character, Integer>> totalsByInitial = Linq.fromIterable(PERSONS)
-            .aggregateBy(
-                person -> person.name().charAt(0),
+            .aggregateBySeed(
                 0,
+                person -> person.name().charAt(0),
                 (sumByInitial, person) -> sumByInitial + person.age()
             )
             .toList();
@@ -888,11 +888,10 @@ class LinqTest {
             new ReadOnlyGroup<>('S', List.of(34))
         ), totalsByInitial);
 
-        Function<Integer, String> seedByAgeGroup = ageGroup -> "group-" + ageGroup + ":";
         List<Groupable<Integer, String>> namesByAgeGroup = Linq.fromIterable(PERSONS)
-            .<Integer, String>aggregateBy(
+            .aggregateBy(
                 person -> person.age() / 10,
-                seedByAgeGroup,
+                ageGroup -> "group-" + ageGroup + ":",
                 (accumulator, person) -> accumulator + person.name() + "|"
             )
             .toList();

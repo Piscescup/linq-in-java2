@@ -440,7 +440,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super T, ? extends K> keySelector,
         Function<? super T, ? extends E> elementSelector
     ) {
-        return groupBy(keySelector, elementSelector, Linq::defaultEquals);
+        return groupBy(keySelector, elementSelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -478,7 +478,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super T, ? extends E> elementSelector,
         BinFunction<? super K, ? super Enumerable<E>, ? extends R> resultSelector
     ) {
-        return groupResultBy(keySelector, elementSelector, resultSelector, Linq::defaultEquals);
+        return groupResultBy(keySelector, elementSelector, resultSelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -619,7 +619,7 @@ public class Linq<T> implements Enumerable<T> {
 
     @Override
     public Linq<T> union(Enumerable<? extends T> other) {
-        return union(other, Linq::defaultEquals);
+        return union(other, Equalator.defaultEqualator());
     }
 
     @Override
@@ -642,7 +642,7 @@ public class Linq<T> implements Enumerable<T> {
         Enumerable<? extends T> other,
         Function<? super T, ? extends K> keySelector
     ) {
-        return unionBy(other, keySelector, Linq::defaultEquals);
+        return unionBy(other, keySelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -665,7 +665,7 @@ public class Linq<T> implements Enumerable<T> {
 
     @Override
     public Linq<T> intersect(Enumerable<? extends T> other) {
-        return intersect(other, Linq::defaultEquals);
+        return intersect(other, Equalator.defaultEqualator());
     }
 
     @Override
@@ -693,7 +693,7 @@ public class Linq<T> implements Enumerable<T> {
         Enumerable<? extends K> other,
         Function<? super T, ? extends K> keySelector
     ) {
-        return intersectBy(other, keySelector, Linq::defaultEquals);
+        return intersectBy(other, keySelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -727,7 +727,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super TInner, ? extends K> innerKeySelector,
         BinFunction<? super T, ? super TInner, ? extends R> resultSelector
     ) {
-        return join(inner, outerKeySelector, innerKeySelector, resultSelector, Linq::defaultEquals);
+        return join(inner, outerKeySelector, innerKeySelector, resultSelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -765,7 +765,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super TInner, ? extends K> innerKeySelector,
         BinFunction<? super T, ? super TInner, ? extends R> resultSelector
     ) {
-        return leftJoin(inner, outerKeySelector, innerKeySelector, resultSelector, Linq::defaultEquals);
+        return leftJoin(inner, outerKeySelector, innerKeySelector, resultSelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -808,7 +808,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super TInner, ? extends K> innerKeySelector,
         BinFunction<? super T, ? super TInner, ? extends R> resultSelector
     ) {
-        return rightJoin(inner, outerKeySelector, innerKeySelector, resultSelector, Linq::defaultEquals);
+        return rightJoin(inner, outerKeySelector, innerKeySelector, resultSelector, Equalator.defaultEqualator());
     }
 
     @Override
@@ -1184,7 +1184,7 @@ public class Linq<T> implements Enumerable<T> {
         Function<? super K, ? extends A> seedSelector,
         BinFunction<? super A, ? super T, ? extends A> aggregator
     ) {
-        return aggregateByCore(keySelector, seedSelector, aggregator, Linq::defaultEquals);
+        return aggregateByCore(keySelector, seedSelector, aggregator, Equalator.defaultEqualator());
     }
 
     @Override
@@ -1198,18 +1198,18 @@ public class Linq<T> implements Enumerable<T> {
     }
 
     @Override
-    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
-        Function<? super T, ? extends K> keySelector,
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBySeed(
         A seed,
+        Function<? super T, ? extends K> keySelector,
         BinFunction<? super A, ? super T, ? extends A> aggregator
     ) {
-        return aggregateByCore(keySelector, ignored -> seed, aggregator, Linq::defaultEquals);
+        return aggregateByCore(keySelector, ignored -> seed, aggregator, Equalator.defaultEqualator());
     }
 
     @Override
-    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
-        Function<? super T, ? extends K> keySelector,
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBySeed(
         A seed,
+        Function<? super T, ? extends K> keySelector,
         BinFunction<? super A, ? super T, ? extends A> aggregator,
         Equalator<? super K> equalator
     ) {
@@ -1311,10 +1311,6 @@ public class Linq<T> implements Enumerable<T> {
                 return end();
             }
         };
-    }
-
-    private static <T> boolean defaultEquals(T left, T right) {
-        return Objects.equals(left, right);
     }
 
     @SuppressWarnings("unchecked")

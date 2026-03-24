@@ -118,9 +118,9 @@ public interface Enumerable<T> extends BaseEnumerable<T, Enumerable<T>> {
      * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
      * @throws NullPointerException if {@code keySelector} or {@code aggregator} is {@code null}
      */
-    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
-        Function<? super T, ? extends K> keySelector,
+    <K, A> Enumerable<Groupable<K, A>> aggregateBySeed(
         A seed,
+        Function<? super T, ? extends K> keySelector,
         BinFunction<? super A, ? super T, ? extends A> aggregator
     );
 
@@ -136,9 +136,9 @@ public interface Enumerable<T> extends BaseEnumerable<T, Enumerable<T>> {
      * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
      * @throws NullPointerException if {@code keySelector}, {@code aggregator}, or {@code equalator} is {@code null}
      */
-    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
-        Function<? super T, ? extends K> keySelector,
+    <K, A> Enumerable<Groupable<K, A>> aggregateBySeed(
         A seed,
+        Function<? super T, ? extends K> keySelector,
         BinFunction<? super A, ? super T, ? extends A> aggregator,
         Equalator<? super K> equalator
     );
