@@ -43,6 +43,108 @@ public interface Enumerable<T> extends BaseEnumerable<T, Enumerable<T>> {
     Enumerable<T> take(long count);
 
     /**
+     * Aggregates the sequence into an intermediate accumulator and projects the final result.
+     *
+     * @param seed the initial accumulator value
+     * @param aggregator the function used to combine the accumulator with each element
+     * @param resultSelector the function used to transform the final accumulator into the result
+     * @param <A> the accumulator type
+     * @param <R> the result type
+     * @return {@code R}, the projected aggregated result
+     * @throws NullPointerException if {@code aggregator} or {@code resultSelector} is {@code null}
+     */
+    <A, R> R aggregate(
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Function<? super A, ? extends R> resultSelector
+    );
+
+    /**
+     * Aggregates the sequence by using the first element as the initial accumulator value.
+     *
+     * @param aggregator the function used to combine two elements
+     * @return {@code T}, the final aggregated result
+     * @throws NullPointerException if {@code aggregator} is {@code null}
+     * @throws NoSuchElementException if the sequence is empty
+     */
+    T aggregate(BinFunction<? super T, ? super T, ? extends T> aggregator);
+
+    /**
+     * Aggregates the sequence by key by using a key-derived seed factory and the default equality
+     * comparer.
+     *
+     * @param keySelector the function used to extract the key from each element
+     * @param seedSelector the function used to create the initial accumulator for each key
+     * @param aggregator the function used to combine the accumulator with each element
+     * @param <K> the key type
+     * @param <A> the accumulator type
+     * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector}, {@code seedSelector}, or {@code aggregator} is {@code null}
+     */
+    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        Function<? super K, ? extends A> seedSelector,
+        BinFunction<? super A, ? super T, ? extends A> aggregator
+    );
+
+    /**
+     * Aggregates the sequence by key by using a key-derived seed factory.
+     *
+     * @param keySelector the function used to extract the key from each element
+     * @param seedSelector the function used to create the initial accumulator for each key
+     * @param aggregator the function used to combine the accumulator with each element
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @param <A> the accumulator type
+     * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector}, {@code seedSelector}, {@code aggregator}, or {@code equalator} is {@code null}
+     */
+    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        Function<? super K, ? extends A> seedSelector,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Equalator<? super K> equalator
+    );
+
+    /**
+     * Aggregates the sequence by key by using a constant seed value and the default equality
+     * comparer.
+     *
+     * @param keySelector the function used to extract the key from each element
+     * @param seed the initial accumulator value used for every new key
+     * @param aggregator the function used to combine the accumulator with each element
+     * @param <K> the key type
+     * @param <A> the accumulator type
+     * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector} or {@code aggregator} is {@code null}
+     */
+    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator
+    );
+
+    /**
+     * Aggregates the sequence by key by using a constant seed value.
+     *
+     * @param keySelector the function used to extract the key from each element
+     * @param seed the initial accumulator value used for every new key
+     * @param aggregator the function used to combine the accumulator with each element
+     * @param equalator the equality comparer used to compare keys
+     * @param <K> the key type
+     * @param <A> the accumulator type
+     * @return an {@code Enumerable} of grouped aggregate results keyed by {@code K}
+     * @throws NullPointerException if {@code keySelector}, {@code aggregator}, or {@code equalator} is {@code null}
+     */
+    <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Equalator<? super K> equalator
+    );
+
+
+    /**
      * Filters elements by the supplied predicate.
      *
      * @param predicate the condition used to decide whether an element is kept
@@ -838,6 +940,7 @@ public interface Enumerable<T> extends BaseEnumerable<T, Enumerable<T>> {
      * @throws NullPointerException if {@code aggregator} is {@code null}
      */
     <A> A aggregate(A seed, BinFunction<? super A, ? super T, ? extends A> aggregator);
+
 
     /**
      * Returns the element with the minimum comparable key produced by the selector.

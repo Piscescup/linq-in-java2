@@ -64,6 +64,7 @@ public final class LongLinq implements LongEnumerable {
             @Override
             public void reset() {
                 index = 0;
+                resetState();
             }
         };
         this.listFactory = () -> {
@@ -1004,6 +1005,7 @@ public final class LongLinq implements LongEnumerable {
         @Override
         public void reset() {
             index = 0;
+            resetState();
         }
     }
 

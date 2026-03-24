@@ -64,6 +64,7 @@ public final class IntLinq implements IntEnumerable {
             @Override
             public void reset() {
                 index = 0;
+                resetState();
             }
         };
         this.listFactory = () -> {
@@ -1028,6 +1029,7 @@ public final class IntLinq implements IntEnumerable {
         @Override
         public void reset() {
             index = 0;
+            resetState();
         }
     }
 

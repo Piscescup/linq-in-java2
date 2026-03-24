@@ -2,13 +2,17 @@ package io.github.piscescup;
 
 import io.github.piscescup.linq4j2.Enumerable;
 import io.github.piscescup.linq4j2.Enumerator;
+import io.github.piscescup.linq4j2.Groupable;
 import io.github.piscescup.linq4j2.Linq;
+import io.github.piscescup.linq4j2.ReadOnlyGroup;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Random;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -69,6 +73,20 @@ class LinqTest {
                 Person p = enumerator.current();
                 System.out.println(p.email());
             }
+        }
+    }
+
+    @Test
+    void enumeratorReset() {
+        try (Enumerator<Integer> enumerator = Linq.of(1, 2, 3).enumerator()) {
+            assertTrue(enumerator.hasNext());
+            assertEquals(1, enumerator.next());
+            enumerator.reset();
+
+            assertEquals(1, enumerator.next());
+            assertEquals(2, enumerator.next());
+            assertEquals(3, enumerator.next());
+            assertFalse(enumerator.hasNext());
         }
     }
 
@@ -443,26 +461,35 @@ class LinqTest {
 
     @Test
     void orderBy() {
-        // long t3 = System.nanoTime();
-        // List<Person> list1 = io.github.piscescup.linq.Linq.fromIterable(PERSONS)
-        //     .orderBy(Person::age)
-        //     .thenBy(Person::name)
-        //     .thenDescendingBy(Person::address)
-        //     .toList();
-        // long t4 = System.nanoTime();
-        //
-        //
-        // long t1 = System.nanoTime();
-        // List<Person> list = Linq.fromIterable(PERSONS)
-        //     .orderBy(Person::age)
-        //     .thenOrderBy(Person::name)
-        //     .thenOrderByDescending(Person::address)
-        //     .toList();
-        // long t2 = System.nanoTime();
-        //
-        //
-        // System.out.println("Linq2 :" + (t2 - t1) / 1000  + " us" );
-        // System.out.println("Linq  :" + (t4 - t3) / 1000 + " us" );
+        long t3 = System.nanoTime();
+        List<Person> list1 = io.github.piscescup.linq.Linq.fromIterable(PERSONS)
+            .orderBy(Person::age)
+            .thenBy(Person::name)
+            .thenDescendingBy(Person::address)
+            .toList();
+        long t4 = System.nanoTime();
+
+
+        long t1 = System.nanoTime();
+        List<Person> list = Linq.fromIterable(PERSONS)
+            .orderBy(Person::age)
+            .thenOrderBy(Person::name)
+            .thenOrderByDescending(Person::address)
+            .toList();
+        long t2 = System.nanoTime();
+
+        long st1  = System.nanoTime();
+        List<Person> list2 = PERSONS.stream()
+            .sorted(Comparator.comparing(Person::age)
+                .thenComparing(Person::name)
+                .thenComparing(Comparator.comparing(Person::email).reversed())
+            )
+            .toList();
+        long st2 = System.nanoTime();
+
+        System.out.println("Linq2 :" + (t2 - t1) / 1000  + " us" );
+        System.out.println("Linq  :" + (t4 - t3) / 1000 + " us" );
+        System.out.println("Stream:" + (st2 - st1) / 1000 + " us");
 
         long t5 = System.nanoTime();
         io.github.piscescup.linq.Linq.of(1, 2, 3, 4, 5, 6, 7, 8, 9)
@@ -475,8 +502,8 @@ class LinqTest {
             .toList();
         long t8 = System.nanoTime();
 
-        System.out.println(t6 - t5);
-        System.out.println(t8 - t7);
+        System.out.println("Int Linq : " + (t6 - t5) / 1000 + " us");
+        System.out.println("Int Linq2: " + (t8 - t7) / 1000 + " us");
     }
 
     @Test
@@ -816,6 +843,64 @@ class LinqTest {
 
     @Test
     void aggregate() {
+        int sum = Linq.of(1, 2, 3, 4)
+            .aggregate(0, Integer::sum);
+        assertEquals(10, sum);
+
+        String joined = Linq.of("a", "bb", "ccc")
+            .aggregate(
+                new StringBuilder(),
+                StringBuilder::append,
+                StringBuilder::toString
+            );
+        assertEquals("abbccc", joined);
+
+        int product = Linq.of(2, 3, 4)
+            .aggregate((left, right) -> left * right);
+        assertEquals(24, product);
+
+        assertThrows(NoSuchElementException.class, () ->
+            Linq.<Integer>of().aggregate(Integer::sum)
+        );
+
+        List<Groupable<Character, Integer>> totalsByInitial = Linq.fromIterable(PERSONS)
+            .aggregateBy(
+                person -> person.name().charAt(0),
+                0,
+                (sumByInitial, person) -> sumByInitial + person.age()
+            )
+            .toList();
+        assertEquals(List.of(
+            new ReadOnlyGroup<>('A', List.of(23)),
+            new ReadOnlyGroup<>('B', List.of(30)),
+            new ReadOnlyGroup<>('C', List.of(64)),
+            new ReadOnlyGroup<>('D', List.of(35)),
+            new ReadOnlyGroup<>('E', List.of(22)),
+            new ReadOnlyGroup<>('F', List.of(40)),
+            new ReadOnlyGroup<>('G', List.of(27)),
+            new ReadOnlyGroup<>('H', List.of(33)),
+            new ReadOnlyGroup<>('I', List.of(26)),
+            new ReadOnlyGroup<>('J', List.of(31)),
+            new ReadOnlyGroup<>('L', List.of(45)),
+            new ReadOnlyGroup<>('Z', List.of(82)),
+            new ReadOnlyGroup<>('W', List.of(73)),
+            new ReadOnlyGroup<>('Y', List.of(38)),
+            new ReadOnlyGroup<>('S', List.of(34))
+        ), totalsByInitial);
+
+        Function<Integer, String> seedByAgeGroup = ageGroup -> "group-" + ageGroup + ":";
+        List<Groupable<Integer, String>> namesByAgeGroup = Linq.fromIterable(PERSONS)
+            .<Integer, String>aggregateBy(
+                person -> person.age() / 10,
+                seedByAgeGroup,
+                (accumulator, person) -> accumulator + person.name() + "|"
+            )
+            .toList();
+        assertEquals(List.of(
+            new ReadOnlyGroup<>(2, List.of("group-2:Alice|Charlie|Eve|Grace|Ivy|LiHua|ZhangWei|LiuYang|ZhaoMin|ZhouKai|")),
+            new ReadOnlyGroup<>(3, List.of("group-3:Bob|David|Hank|Jack|WangFang|ChenJie|YangLei|SunTao|")),
+            new ReadOnlyGroup<>(4, List.of("group-4:Frank|WuDi|"))
+        ), namesByAgeGroup);
     }
 
     @Test

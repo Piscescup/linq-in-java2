@@ -93,6 +93,7 @@ public class Linq<T> implements Enumerable<T> {
             @Override
             public void reset() {
                 index = 0;
+                resetState();
             }
         });
     }
@@ -1152,6 +1153,70 @@ public class Linq<T> implements Enumerable<T> {
     }
 
     @Override
+    public <A, R> R aggregate(
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Function<? super A, ? extends R> resultSelector
+    ) {
+        NullCheck.requireNonNull(resultSelector);
+        return resultSelector.apply(aggregate(seed, aggregator));
+    }
+
+    @Override
+    public T aggregate(BinFunction<? super T, ? super T, ? extends T> aggregator) {
+        NullCheck.requireNonNull(aggregator);
+        try (Enumerator<T> enumerator = enumerator()) {
+            if (!enumerator.moveNext()) {
+                throw new NoSuchElementException();
+            }
+
+            T result = enumerator.current();
+            while (enumerator.moveNext()) {
+                result = aggregator.apply(result, enumerator.current());
+            }
+            return result;
+        }
+    }
+
+    @Override
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        Function<? super K, ? extends A> seedSelector,
+        BinFunction<? super A, ? super T, ? extends A> aggregator
+    ) {
+        return aggregateByCore(keySelector, seedSelector, aggregator, Linq::defaultEquals);
+    }
+
+    @Override
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        Function<? super K, ? extends A> seedSelector,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Equalator<? super K> equalator
+    ) {
+        return aggregateByCore(keySelector, seedSelector, aggregator, equalator);
+    }
+
+    @Override
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator
+    ) {
+        return aggregateByCore(keySelector, ignored -> seed, aggregator, Linq::defaultEquals);
+    }
+
+    @Override
+    public <K, A> Enumerable<Groupable<K, A>> aggregateBy(
+        Function<? super T, ? extends K> keySelector,
+        A seed,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Equalator<? super K> equalator
+    ) {
+        return aggregateByCore(keySelector, ignored -> seed, aggregator, equalator);
+    }
+
+    @Override
     public T min() {
         return minOptional().orElseThrow(NoSuchElementException::new);
     }
@@ -1339,6 +1404,51 @@ public class Linq<T> implements Enumerable<T> {
         return null;
     }
 
+    private static <K, A> AggregateBucket<K, A> findAggregateBucket(
+        List<AggregateBucket<K, A>> buckets,
+        K key,
+        Equalator<? super K> equalator
+    ) {
+        for (AggregateBucket<K, A> bucket : buckets) {
+            if (equalator.equals(bucket.key, key)) {
+                return bucket;
+            }
+        }
+        return null;
+    }
+
+    private <K, A> Enumerable<Groupable<K, A>> aggregateByCore(
+        Function<? super T, ? extends K> keySelector,
+        Function<? super K, ? extends A> seedSelector,
+        BinFunction<? super A, ? super T, ? extends A> aggregator,
+        Equalator<? super K> equalator
+    ) {
+        NullCheck.requireNonNull(keySelector);
+        NullCheck.requireNonNull(seedSelector);
+        NullCheck.requireNonNull(aggregator);
+        NullCheck.requireNonNull(equalator);
+
+        List<AggregateBucket<K, A>> buckets = new ArrayList<>();
+        try (Enumerator<T> enumerator = enumerator()) {
+            while (enumerator.moveNext()) {
+                T element = enumerator.current();
+                K key = keySelector.apply(element);
+                AggregateBucket<K, A> bucket = findAggregateBucket(buckets, key, equalator);
+                if (bucket == null) {
+                    bucket = new AggregateBucket<>(key, seedSelector.apply(key));
+                    buckets.add(bucket);
+                }
+                bucket.value = aggregator.apply(bucket.value, element);
+            }
+        }
+
+        List<Groupable<K, A>> result = new ArrayList<>(buckets.size());
+        for (AggregateBucket<K, A> bucket : buckets) {
+            result.add(new ReadOnlyGroup<>(bucket.key, List.of(bucket.value)));
+        }
+        return fromList(result);
+    }
+
     @SuppressWarnings("unchecked")
     private static <T, R> Collection<T> instantiateCollection(Class<R> clazz) {
         if (clazz.isInterface()) {
@@ -1375,6 +1485,17 @@ public class Linq<T> implements Enumerable<T> {
         @Override
         public void reset() {
             index = 0;
+            resetState();
+        }
+    }
+
+    private static final class AggregateBucket<K, A> {
+        private final K key;
+        private A value;
+
+        private AggregateBucket(K key, A value) {
+            this.key = key;
+            this.value = value;
         }
     }
 

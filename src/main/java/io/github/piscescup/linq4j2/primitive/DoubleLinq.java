@@ -63,6 +63,7 @@ public final class DoubleLinq implements DoubleEnumerable {
             @Override
             public void reset() {
                 index = 0;
+                resetState();
             }
         };
         this.listFactory = () -> {
@@ -1003,6 +1004,7 @@ public final class DoubleLinq implements DoubleEnumerable {
         @Override
         public void reset() {
             index = 0;
+            resetState();
         }
     }
 
